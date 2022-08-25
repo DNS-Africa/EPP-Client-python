@@ -12,6 +12,8 @@ __author__ = "Ed Pascoe <ed@dnservices.co.za>, David Peall <david@dns.business>"
 import gettext
 import logging
 import optparse
+import os
+from os import isatty
 import os.path
 import random
 import re
@@ -142,6 +144,15 @@ def templatefill(template, defines):
         data[k] = v
     return template % data
 
+def send_epp(data):
+    if options.defs is not None and len(options.defs) > 0:
+        data = templatefill(data, options.defs)
+
+    if options.testing:
+        print(data)
+    else:
+        print(epp.request(data))
+        print("\n<!-- ================ -->\n")
 
 def eppLogin(username, password, services=['urn:ietf:params:xml:ns:domain-1.0', 'urn:ietf:params:xml:ns:contact-1.0']):
     """Performs an epp login command. Ignore the services parameter for the co.za namespace."""
@@ -223,9 +234,10 @@ if __name__ == "__main__":
         logging.basicConfig(level=logging.INFO)
         colorlogging.enableLogging(debug=False, color=True, console=True)
 
-    if not args:
-        parser.print_help()
-        sys.exit(2)
+    # Args not necessary
+    # if not args:
+    #     parser.print_help()
+    #     sys.exit(2)
 
     if not options.testing:
         try:
@@ -251,17 +263,16 @@ if __name__ == "__main__":
         if options.username is not None:
             eppLogin(options.username, options.password)
 
+    # Permit the first xml command file from an input pipe - that will permit flexibility of xml command file pre-processing 
+    # Eg. remove comments:
+    # cat create_domain.xml | sed -e 's/<!--.*-->//g' -e '/<!--/,/-->/d' | epp.py ...
+
+    if not isatty(sys.stdin.isatty()):
+        send_epp(sys.stdin.read())
+
     for fname in args:
         try:
-            data = fileRead(fname)
-            if options.defs is not None and len(options.defs) > 0:
-                data = templatefill(data, options.defs)
-
-            if options.testing:
-                print(data)
-            else:
-                print(epp.request(data))
-                print("\n<!-- ================ -->\n")
+            send_epp(fileRead(fname))
         except IOError:
             if not os.path.exists(fname):
                 print(_("The file %s does not exist.") % fname)
