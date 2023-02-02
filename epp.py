@@ -50,15 +50,10 @@ class EPPTCPTransport:
         """Connect to the EPP server. Server header in self.header"""
         if usessl:
             self._isssl = True
-            context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
+            context = ssl.SSLContext(ssl.PROTOCOL_TLS)
             if cert:
                 context.load_cert_chain(cert) #'/u/elp/test/epp/dnservices.pem') #certfile="cert.crt", keyfile="cert.key")
             self.sock = context.wrap_socket(socket.socket(socket.AF_INET))
-            # s = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-            ## do not require a certificate from the server
-            # self.sock = ssl.wrap_socket(s,cert_reqs = ssl.CERT_NONE,certfile = cert, ssl_version=ssl_version_dict[sslversion])
-            # print("Port %s" % (port))
-            # conn.connect(('127.0.0.1',8443))
             self.sock.connect((host, port))
 
         if not nogreeting:
@@ -210,8 +205,6 @@ if __name__ == "__main__":
     parser.add_option("--host", "--ip", dest="host", default="127.0.0.1", help=_("Host to connect to [%default] "))
     parser.add_option("--port", "-p", dest="port", default="8443", help=_("Port to connect to") + " [%default]")
     parser.add_option("--cert", "-c", dest="cert", help=_("SSL certificate to use for authenticated connections"))
-    parser.add_option("--sslversion", "-s", dest="sslversion", default='TLSv1',
-                      help=_("The ssl version identifier {SSLv2, SSLv3, SSLv23, TLSv1}"))
     parser.add_option("--nossl", dest="nossl", action="store_true", default=False, help=_("Do not use SSL"))
     parser.add_option("--verbose", "-v", dest="verbose", action="store_true", default=False,
                       help=_("Show the EPP server greeting and other debug info"))
