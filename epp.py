@@ -227,10 +227,11 @@ if __name__ == "__main__":
         logging.basicConfig(level=logging.INFO)
         colorlogging.enableLogging(debug=False, color=True, console=True)
 
-    # Args not necessary
-    # if not args:
-    #     parser.print_help()
-    #     sys.exit(2)
+    # Args not necessary if piping an EPP xml command into epp.py
+    if isatty(sys.stdin.isatty()):
+        if not args:
+            parser.print_help()
+            sys.exit(2)
 
     if not options.testing:
         try:
