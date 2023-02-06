@@ -22,6 +22,7 @@ import ssl
 import struct
 import sys
 import time
+import select
 
 from lib import colorlogging
 
@@ -261,7 +262,7 @@ if __name__ == "__main__":
     # Eg. remove comments:
     # cat create_domain.xml | sed -e 's/<!--.*-->//g' -e '/<!--/,/-->/d' | epp.py ...
 
-    if not isatty(sys.stdin.isatty()):
+    if select.select([sys.stdin, ], [], [], 0.0)[0]:
         send_epp(sys.stdin.read())
 
     for fname in args:
