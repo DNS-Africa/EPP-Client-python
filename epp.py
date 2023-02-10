@@ -7,11 +7,11 @@
 $Id$
 """
 __version__ = "$Id$"
-__author__ = "Ed Pascoe <ed@dnservices.co.za>, David Peall <david@dns.business>"
+__author__ = "Ed Pascoe <ed@dnservices.co.za>, David Peall <david@dns.business>, Theo Kramer <theo@dns.business>"
 
 import gettext
 import logging
-import optparse
+import optparse # brain dead python2 argument parser - replace with argparse
 import os
 from os import isatty
 import os.path
@@ -133,17 +133,25 @@ def templatefill(template, defines):
     for d in defines:
         p = d.find("=")
         if p == -1:
-            print("Unable to interpret definition %s. Aborting!" % (d))
+            print("templatefill(): Unable to interpret definition %s. Aborting!" % (d))
             sys.exit(1)
         k = d[:p]
         v = d[p + 1:]
         data[k] = v
-    return template % data
+    retTemplate = template
+    try:
+        retTemplate = template % data
+    except KeyError as e:
+        print("templatefill(): Replacement value for key %s not defined." % (e))
+    except ValueError as ve:
+        print("templatefill(): Key name error on one of the replacement keys (%s) in the input text. The key format must conform to '%%s(key)s'" % (defines))
+        print("templatefill(): The associated error is '%s'" % (ve))
+    finally:
+        return retTemplate
 
 def send_epp(data):
     if options.defs is not None and len(options.defs) > 0:
-        data = templatefill(data, options.defs)
-
+          data = templatefill(data, options.defs)
     if options.testing:
         print(data)
     else:
@@ -229,7 +237,10 @@ if __name__ == "__main__":
         colorlogging.enableLogging(debug=False, color=True, console=True)
 
     # Args not necessary if piping an EPP xml command into epp.py
+    inputFromStdin = False
     if isatty(sys.stdin.isatty()):
+    # if select.select([sys.stdin, ], [], [], 0.0)[0]:
+        inputFromStdin = True
         if not args:
             parser.print_help()
             sys.exit(2)
@@ -262,8 +273,15 @@ if __name__ == "__main__":
     # Eg. remove comments:
     # cat create_domain.xml | sed -e 's/<!--.*-->//g' -e '/<!--/,/-->/d' | epp.py ...
 
+    # print(_("Args are:- %s") % (args))
+
     if select.select([sys.stdin, ], [], [], 0.0)[0]:
+    # if inputFromStdin == True:
         send_epp(sys.stdin.read())
+        # print(sys.stdin.read())
+
+    # print(_("Args are:- %s") % (args))
+    # sys.exit(1)
 
     for fname in args:
         try:
