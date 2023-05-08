@@ -26,6 +26,15 @@ import select
 
 from lib import colorlogging
 
+# From chatgpt https://chat.openai.com - provide python3 code to insert at the start of every function to list the name of the function and the arguments passed to the function
+def log_function_call(func):
+    def wrapper(*args, **kwargs):
+        if options.testing:
+            print(f"Function Name: {func.__name__}")
+            print(f"Arguments: {args} {kwargs}")
+        result = func(*args, **kwargs)
+        return result
+    return wrapper
 
 # Enable translation
 t = gettext.translation('rye', os.path.join(os.path.dirname(__file__), 'locale'), fallback=True)
@@ -127,7 +136,8 @@ class EPPTCPTransport:
         self.sock.close()
 
 
-def templatefill(template, defines):
+@log_function_call  # decorator to list function name and arguments
+def templatefill(template, defines, kwarg1=None, kwarg2=None):
     """Fill out the given template with values as requested"""
     data = {}
     for d in defines:
@@ -148,6 +158,7 @@ def templatefill(template, defines):
         print("templatefill(): The associated error is '%s'" % (ve))
     finally:
         return retTemplate
+    pass
 
 def send_epp(data):
     if options.defs is not None and len(options.defs) > 0:
