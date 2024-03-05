@@ -248,10 +248,8 @@ if __name__ == "__main__":
         colorlogging.enableLogging(debug=False, color=True, console=True)
 
     # Args not necessary if piping an EPP xml command into epp.py
-    inputFromStdin = False
     if isatty(sys.stdin.isatty()):
     # if select.select([sys.stdin, ], [], [], 0.0)[0]:
-        inputFromStdin = True
         if not args:
             parser.print_help()
             sys.exit(2)
@@ -287,7 +285,6 @@ if __name__ == "__main__":
     # print(_("Args are:- %s") % (args))
 
     if select.select([sys.stdin, ], [], [], 0.0)[0]:
-    # if inputFromStdin == True:
         send_epp(sys.stdin.read())
         # print(sys.stdin.read())
 
