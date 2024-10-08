@@ -2,18 +2,13 @@
 # -*- coding: utf-8 -*-
 # Sample Python EPP client
 """
-© Domain Name Services (Pty) Ltd. 2010. All rights reserved.
-© DNS Africa Ltd. 2022. All rights reserved.
-$Id$
+© DNS Africa Ltd. 2022-2024. All rights reserved.
 """
-__version__ = "$Id$"
-__author__ = "Ed Pascoe <ed@dnservices.co.za>, David Peall <david@dns.business>"
+__author__ = "Ed Pascoe <ed@dnservices.co.za>, David Kinnes <david@dns.business>"
 
-import gettext
 import logging
 import optparse
 import os
-from os import isatty
 import os.path
 import random
 import re
@@ -22,47 +17,42 @@ import ssl
 import struct
 import sys
 import time
+from os import isatty
 
 from lib import colorlogging
 
 
-# Enable translation
-t = gettext.translation('rye', os.path.join(os.path.dirname(__file__), 'locale'), fallback=True)
-_ = t.gettext
-
-log = logging.getLogger()
-
-packfmt = "!I"
-
-
 class EPPTCPTransport:
-    """An epp client transport class. This is just the raw TCP IP protocol. The XML data needs to be handled separatly.
-       The EPP transport protocol is definied at http://tools.ietf.org/html/rfc5734 it looks complicated but is
+    """An epp client transport class. This is just the raw TCP IP protocol. The XML data needs to be handled separately.
+       The EPP transport protocol is defined at http://tools.ietf.org/html/rfc5734 it looks complicated but is
        actually very simple and elegant.
        the actual data should be XML data formated according to RFC5730-RFC5733
        No validation of any data takes place in this Class
     """
     sock = None
     _greeting = ""
-    _isssl = None
+    packfmt = "!I"
 
-    def __init__(self, host="127.0.0.1", port=3121, usessl=True, cert=None, nogreeting=False):
+    def __init__(self, host="127.0.0.1", port=3121, cert=None, nogreeting=False):
         """Connect to the EPP server. Server header in self.header"""
-        if usessl:
-            self._isssl = True
-            context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
-            if cert:
-                context.load_cert_chain(cert) #'/u/elp/test/epp/dnservices.pem') #certfile="cert.crt", keyfile="cert.key")
-            self.sock = context.wrap_socket(socket.socket(socket.AF_INET))
-            # s = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-            ## do not require a certificate from the server
-            # self.sock = ssl.wrap_socket(s,cert_reqs = ssl.CERT_NONE,certfile = cert, ssl_version=ssl_version_dict[sslversion])
-            # print("Port %s" % (port))
-            # conn.connect(('127.0.0.1',8443))
-            self.sock.connect((host, port))
+        self._isssl = True
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+        if cert is not None:
+            logging.debug("Loading certificate from %s", cert)
+            context.load_cert_chain(cert)
+        else:
+            logging.debug("Connecting without certificate.")
+        self.sock = context.wrap_socket(socket.socket(socket.AF_INET), server_hostname=host)
+        logging.debug(f"Connecting to host {host}:{port}")
+        self.sock.connect((host, port))
+        logging.debug(f"Connection to host {host}:{port} established")
 
         if not nogreeting:
+            logging.debug(f"Fetching greeting")
             self._greeting = self.get()
+            logging.debug(f"Greeting: {self._greeting}")
 
     def get(self):
         """Get an EPP response """
@@ -72,21 +62,21 @@ class EPPTCPTransport:
         while len(header) < 4:
             if self._isssl:
                 data = self.sock.recv(4)
-                #log.debug("Initial header via TLS. (%s), %s len %s", type(data), data, len(data))
+                logging.debug("Initial header via TLS. (%s), %s len %s", type(data), data, len(data))
             else:
                 data = self.sock.recv(4, 0x40)  # 0x40 is the MSG_WAITALL flag which can only be used on plain sockets
-                #log.debug("Initial header no encryption. (%s), %s len %s", type(data), data, len(data))
+                logging.debug("Initial header no encryption. (%s), %s len %s", type(data), data, len(data))
             if len(data) == 0:
-                print("<!-- " + _(
-                    "Did not receive anything from the server or socket timeout. Was the initial login invalid?") + " -->")
+                print("<!-- " +
+                      "Did not receive anything from the server or socket timeout. Was the initial login invalid?" + " -->")
                 sys.exit(1)
             header = header + data
             if len(header) > 4:
                 rest = header[4:]
                 header = header[:4]
 
-        bytes1 = struct.unpack(packfmt, header)[0]
-        log.debug("Initial header no encryption. (%s), %s Body should be %s bytes", type(header), header, bytes1)
+        bytes1 = struct.unpack(self.packfmt, header)[0]
+        logging.debug("Initial header no encryption. (%s), %s Body should be %s bytes", type(header), header, bytes1)
 
         data = bytearray()  # the buffer
         total = rest  # Initialize with anything extra read while we were getting the header.
@@ -94,25 +84,25 @@ class EPPTCPTransport:
             bytesleft = (bytes1 - 4) - len(total)
             data = self.sock.recv(bytesleft)
             length = len(data)
-            #length = self.sock.recv_into(data, 16384)
-            #log.debug("Data %s %s", len(data), data)
+            # length = self.sock.recv_into(data, 16384)
+            # logging.debug("Data %s %s", len(data), data)
             if length == 0:
-                print("<!-- " + _(
-                    "Could not receive the rest of the expected message header. Only have {0} bytes out of expected {1}.").format(
-                    len(total), (bytes1 - 4)) + " -->")
+                print("<!-- " +
+                      "Could not receive the rest of the expected message header. Only have {0} bytes out of expected {1}.".format(
+                          len(total), (bytes1 - 4)) + " -->")
                 sys.exit(1)
             total = total + data
-        return str(total,'utf-8')
+        return str(total, 'utf-8')
 
     def send(self, data: bytes):
         """Send an EPP command """
         # Write the header
-        self.sock.write(struct.pack('=L', socket.htonl(len(data) + 4)))
+        self.sock.sendall(struct.pack('=L', socket.htonl(len(data) + 4)))
 
-        log.debug('Sending size %s bytes %s' % ((len(data) + 4),struct.pack('=L', socket.htonl(len(data) + 4))))
+        logging.debug('Sending size %s bytes %s' % ((len(data) + 4), struct.pack('=L', socket.htonl(len(data) + 4))))
         # Send the data
-        self.sock.write(data)
-        log.debug("Sent: %s", data)
+        self.sock.sendall(data)
+        logging.debug("Sent: %s", data)
 
     def request(self, data):
         """Convenience function. Does a send and then returns the result of a get. Also converts the string __CLTRID__ to a suitable unique clTRID"""
@@ -144,6 +134,7 @@ def templatefill(template, defines):
         data[k] = v
     return template % data
 
+
 def send_epp(data):
     if options.defs is not None and len(options.defs) > 0:
         data = templatefill(data, options.defs)
@@ -154,30 +145,37 @@ def send_epp(data):
         print(epp.request(data))
         print("\n<!-- ================ -->\n")
 
+
 def eppLogin(username, password, services=['urn:ietf:params:xml:ns:domain-1.0', 'urn:ietf:params:xml:ns:contact-1.0']):
     """Performs an epp login command. Ignore the services parameter for the co.za namespace."""
     template = """<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<epp xmlns="urn:ietf:params:xml:ns:epp-1.0">
-   <command>
-      <login>
-         <clID>%(username)s</clID>
-         <pw>%(password)s</pw>
-         <options>
-            <version>1.0</version>
-            <lang>en</lang>
-         </options>
-         <svcs>"""
+                <epp xmlns="urn:ietf:params:xml:ns:epp-1.0">
+                   <command>
+                      <login>
+                         <clID>%(username)s</clID>
+                         <pw>%(password)s</pw>
+                         <options>
+                            <version>1.0</version>
+                            <lang>en</lang>
+                         </options>
+                         <svcs>"""
     for svc in services:
         template = template + "            <objURI>%s</objURI>\n" % (svc)
     template = template + """
-         </svcs>
-      </login>
-      <clTRID>__CLTRID__</clTRID>
-   </command>
-</epp>"""
+                                 <svcExtension>
+                                    <extURI>urn:ietf:params:xml:ns:secDNS-1.1</extURI>
+                                 </svcExtension>
+                                 </svcs>
+                              </login>
+                              <clTRID>__CLTRID__</clTRID>
+                           </command>
+                        </epp>"""
     data = {'username': username, 'password': password}
+    if options.verbose:
+        print(f"Sending Login:\n {template % data}\n")
     result = str(epp.request(template % data))
-    if re.search('result code.*1000', result): return True  # Good login.
+    if re.search('result code.*1000', result):
+        return True  # Good login.
     if re.search('result code.*2002', result):
         return True  # Already logged in.
     else:
@@ -198,33 +196,33 @@ def fileRead(fname):
 
 
 if __name__ == "__main__":
-    usage = (_("Usage:") + " %prog [<options>] <files...>\n" +
-             _("Example EPP client. The individual EPP commands should be in files specified on the command line.\n")
-             + _("Eg: ./epp.py --host=reg-test.dnservices.co.za login.xml create_host.xml create_domain.xml\n")
-             + _("Will replace all occurances of __CLTRID__  with a suitable clTRID value\n"))
+    usage = ("Usage:" + " %prog [<options>] <files...>\n"
+             + "Example EPP client. The individual EPP commands should be in files specified on the command line.\n"
+             + "Eg: ./epp.py --host=reg-test.dnservices.co.za login.xml create_host.xml create_domain.xml\n"
+             + "Will replace all occurances of __CLTRID__  with a suitable clTRID value\n")
     if sys.version_info[0] >= 2 and sys.version_info[1] >= 6:
         usage = usage + __doc__
     # print usage
     # sys.exit(1)
     parser = optparse.OptionParser(usage)
-    parser.add_option("--host", "--ip", dest="host", default="127.0.0.1", help=_("Host to connect to [%default] "))
-    parser.add_option("--port", "-p", dest="port", default="8443", help=_("Port to connect to") + " [%default]")
-    parser.add_option("--cert", "-c", dest="cert", help=_("SSL certificate to use for authenticated connections"))
+    parser.add_option("--host", "--ip", dest="host", default="127.0.0.1", help="Host to connect to [%default] ")
+    parser.add_option("--port", "-p", dest="port", default="8443", help="Port to connect to" + " [%default]")
+    parser.add_option("--cert", "-c", dest="cert", help="SSL certificate to use for authenticated connections")
     parser.add_option("--sslversion", "-s", dest="sslversion", default='TLSv1',
-                      help=_("The ssl version identifier {SSLv2, SSLv3, SSLv23, TLSv1}"))
-    parser.add_option("--nossl", dest="nossl", action="store_true", default=False, help=_("Do not use SSL"))
+                      help="The ssl version identifier {SSLv2, SSLv3, SSLv23, TLSv1}")
+    parser.add_option("--nossl", dest="nossl", action="store_true", default=False, help="Do not use SSL")
     parser.add_option("--verbose", "-v", dest="verbose", action="store_true", default=False,
-                      help=_("Show the EPP server greeting and other debug info"))
-    parser.add_option("--username", "-u", dest="username", help=_(
-        "Username to login with. If not specified will assume one of the provided files will do the login."))
-    parser.add_option("--password", dest="password", help=_("Password to login with"))
+                      help="Show the EPP server greeting and other debug info")
+    parser.add_option("--username", "-u", dest="username", help=
+    "Username to login with. If not specified will assume one of the provided files will do the login.")
+    parser.add_option("--password", dest="password", help="Password to login with")
     parser.add_option("--ng", dest="nogreeting", action="store_true", default=False,
-                      help=_("Do not wait for an EPP server greeting"))
+                      help="Do not wait for an EPP server greeting")
     parser.add_option("--testing", "-t", dest="testing", action="store_true", default=False,
-                      help=_("Do not connect to the server just output the completed templates"))
+                      help="Do not connect to the server just output the completed templates")
     parser.add_option("-d", "--define", dest="defs", action="append",
-                      help=_("For scripting, any fields to be replaced (python dictionary subsitution). Eg: -d "
-                             "DOMAIN=test.co.za will replace %(DOMAIN)s with test.co.za"))
+                      help="For scripting, any fields to be replaced (python dictionary subsitution). Eg: -d "
+                           "DOMAIN=test.co.za will replace %(DOMAIN)s with test.co.za")
     (options, args) = parser.parse_args()
 
     if options.verbose:
@@ -247,10 +245,10 @@ if __name__ == "__main__":
                 except IOError as e:
                     print("Could not read the SSL certificate %s\n%s" % (options.cert, e))
                     sys.exit(1)
-                epp = EPPTCPTransport(options.host, int(options.port), usessl=not options.nossl, cert=options.cert,
+                epp = EPPTCPTransport(options.host, int(options.port), cert=options.cert,
                                       nogreeting=options.nogreeting)
             else:
-                epp = EPPTCPTransport(options.host, int(options.port), not options.nossl, nogreeting=options.nogreeting)
+                epp = EPPTCPTransport(options.host, int(options.port), nogreeting=options.nogreeting)
         except ssl.SSLError as e:
             print("Could not connect due to an SSL error")
             print(e)
@@ -267,18 +265,24 @@ if __name__ == "__main__":
     # Eg. remove comments:
     # cat create_domain.xml | sed -e 's/<!--.*-->//g' -e '/<!--/,/-->/d' | epp.py ...
 
-    if not isatty(sys.stdin.isatty()):
-        send_epp(sys.stdin.read())
-
+    logging.debug("Got to the files")
     for fname in args:
         try:
+            logging.debug(f"Sending file {fname}")
             send_epp(fileRead(fname))
         except IOError:
             if not os.path.exists(fname):
-                print(_("The file %s does not exist.") % fname)
+                print("The file %s does not exist." % fname)
             else:
-                print(_("Unable to read %s.") % fname)
+                print("Unable to read %s." % fname)
             sys.exit(1)
+
+    if not isatty(sys.stdin.isatty()):
+        request_data = sys.stdin.read()
+        if len(request_data) > 0:
+            if options.verbose:
+                print(f"Sending from stdin:\n{request_data}")
+            send_epp(request_data)
 
     if not options.testing:
         epp.close()
