@@ -1,0 +1,4 @@
+#!/bin/bash
+
+# Required to pass build env vars to the dockerfile on docker hub
+docker build -t $IMAGE_NAME . --build-arg SOURCE_BRANCH=${SOURCE_BRANCH}
