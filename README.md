@@ -19,7 +19,7 @@ docker pull dnsbusiness/epp-client:dev
 ### Operating modes
 #### Specifying list of template files:
 ```shell
-docker run -v /templates:/templates dnsbusiness/epp-client:dev /templates/first_command.xml
+docker run --rm -v /templates:/templates dnsbusiness/epp-client:dev /templates/first_command.xml
 ```
 
 #### Pipe XML data from stdin:
@@ -30,7 +30,7 @@ cat templates/domain_info.xml | docker run -i dnsbusiness/epp-client:dev
 ### Using certificate:
 To access certificate files you will need to map the directrory or file into the image using -v.  Multiple -v arguments are possible.
 ```shell
-docker run -i -v /certs:/certs dnsbusiness/epp-client:dev -c /certs/mycert.crt
+docker run --rm -i -v /certs:/certs dnsbusiness/epp-client:dev -c /certs/mycert.crt
 ```
 
 ### Other options:

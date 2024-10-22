@@ -12,14 +12,36 @@ import os
 import os.path
 import random
 import re
+import select
 import socket
 import ssl
 import struct
 import sys
 import time
-from os import isatty
+from typing import List
 
 from lib import colorlogging
+
+LOGIN_TEMPLATE="""<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<epp xmlns="urn:ietf:params:xml:ns:epp-1.0">
+   <command>
+      <login>
+         <clID>%(username)s</clID>
+         <pw>%(password)s</pw>
+         <options>
+            <version>1.0</version>
+            <lang>en</lang>
+         </options>
+         <svcs>
+%(svc)s
+         <svcExtension>
+%(svc_extension)s
+         </svcExtension>
+         </svcs>
+      </login>
+      <clTRID>__CLTRID__</clTRID>
+   </command>
+</epp>"""
 
 
 class EPPTCPTransport:
@@ -146,34 +168,25 @@ def send_epp(data):
         print("\n<!-- ================ -->\n")
 
 
-def eppLogin(username, password, services=['urn:ietf:params:xml:ns:domain-1.0', 'urn:ietf:params:xml:ns:contact-1.0']):
+def eppLogin(username: str, password: str, services: List = None, extensions: List = None):
     """Performs an epp login command. Ignore the services parameter for the co.za namespace."""
-    template = """<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-                <epp xmlns="urn:ietf:params:xml:ns:epp-1.0">
-                   <command>
-                      <login>
-                         <clID>%(username)s</clID>
-                         <pw>%(password)s</pw>
-                         <options>
-                            <version>1.0</version>
-                            <lang>en</lang>
-                         </options>
-                         <svcs>"""
-    for svc in services:
-        template = template + "            <objURI>%s</objURI>\n" % (svc)
-    template = template + """
-                                 <svcExtension>
-                                    <extURI>urn:ietf:params:xml:ns:secDNS-1.1</extURI>
-                                 </svcExtension>
-                                 </svcs>
-                              </login>
-                              <clTRID>__CLTRID__</clTRID>
-                           </command>
-                        </epp>"""
-    data = {'username': username, 'password': password}
+    """urn:ietf:params:xml:ns:secDNS-1.1"""
+    """['urn:ietf:params:xml:ns:domain-1.0', 'urn:ietf:params:xml:ns:contact-1.0']"""
+
+    # Load the EPP services
+    svc = ''
+    for service in services:
+         svc += f"            <objURI>{service}</objURI>\n"
+
+    # Load the EPP extensions
+    svc_ext = ''
+    for extension in extensions:
+        svc_ext += f"            <extURI>{extension}</extURI>\n"
+
+    data = {'username': username, 'password': password, 'svc': svc, 'svc_extension': svc_ext}
     if options.verbose:
-        print(f"Sending Login:\n {template % data}\n")
-    result = str(epp.request(template % data))
+        print(f"Sending Login:\n {LOGIN_TEMPLATE % data}\n")
+    result = str(epp.request(LOGIN_TEMPLATE % data))
     if re.search('result code.*1000', result):
         return True  # Good login.
     if re.search('result code.*2002', result):
@@ -198,7 +211,7 @@ def fileRead(fname):
 if __name__ == "__main__":
     usage = ("Usage:" + " %prog [<options>] <files...>\n"
              + "Example EPP client. The individual EPP commands should be in files specified on the command line.\n"
-             + "Eg: ./epp.py --host=reg-test.dnservices.co.za login.xml create_host.xml create_domain.xml\n"
+             + "Eg: docker run --rm -i -v /certs:/certs -c /certs/my_cert_bundle.pem --host=reg-test.dnservices.co.za login.xml create_host.xml create_domain.xml\n"
              + "Will replace all occurances of __CLTRID__  with a suitable clTRID value\n")
     if sys.version_info[0] >= 2 and sys.version_info[1] >= 6:
         usage = usage + __doc__
@@ -206,11 +219,8 @@ if __name__ == "__main__":
     # sys.exit(1)
     parser = optparse.OptionParser(usage)
     parser.add_option("--host", "--ip", dest="host", default="127.0.0.1", help="Host to connect to [%default] ")
-    parser.add_option("--port", "-p", dest="port", default="8443", help="Port to connect to" + " [%default]")
+    parser.add_option("--port", "-p", dest="port", default="3121", help="Port to connect to" + " [%default]")
     parser.add_option("--cert", "-c", dest="cert", help="SSL certificate to use for authenticated connections")
-    parser.add_option("--sslversion", "-s", dest="sslversion", default='TLSv1',
-                      help="The ssl version identifier {SSLv2, SSLv3, SSLv23, TLSv1}")
-    parser.add_option("--nossl", dest="nossl", action="store_true", default=False, help="Do not use SSL")
     parser.add_option("--verbose", "-v", dest="verbose", action="store_true", default=False,
                       help="Show the EPP server greeting and other debug info")
     parser.add_option("--username", "-u", dest="username", help=
@@ -223,6 +233,12 @@ if __name__ == "__main__":
     parser.add_option("-d", "--define", dest="defs", action="append",
                       help="For scripting, any fields to be replaced (python dictionary subsitution). Eg: -d "
                            "DOMAIN=test.co.za will replace %(DOMAIN)s with test.co.za")
+    parser.add_option("--svc", dest="svc", action="append", default=['urn:ietf:params:xml:ns:domain-1.0', 'urn:ietf:params:xml:ns:contact-1.0'],
+                      help="Add a services sent with the epp login command "
+                           "--svc 'urn:ietf:params:xml:ns:host-1.0'")
+    parser.add_option("--svc-ext", dest="svc_ext", action="append", default=['urn:ietf:params:xml:ns:secDNS-1.1'],
+                      help="Add a services extensions sent with the epp login command "
+                           "--svc-ext 'urn:ietf:params:xml:ns:secDNS-1.1'")
     (options, args) = parser.parse_args()
 
     if options.verbose:
@@ -259,16 +275,22 @@ if __name__ == "__main__":
             print(str(epp.getGreeting()))
 
         if options.username is not None:
-            eppLogin(options.username, options.password)
+            eppLogin(options.username, options.password, options.svc, options.svc_ext)
 
     # Permit the first xml command file from an input pipe - that will permit flexibility of xml command file pre-processing 
     # Eg. remove comments:
     # cat create_domain.xml | sed -e 's/<!--.*-->//g' -e '/<!--/,/-->/d' | epp.py ...
+    if select.select([sys.stdin, ], [], [], 0.0)[0]:
+        request_data = sys.stdin.read()
+        if len(request_data) > 0:
+            if options.verbose:
+                print(f"Sending from stdin:\n{request_data}")
+            send_epp(request_data)
 
-    logging.debug("Got to the files")
     for fname in args:
         try:
-            logging.debug(f"Sending file {fname}")
+            if options.verbose:
+                logging.debug(f"Sending file {fname}")
             send_epp(fileRead(fname))
         except IOError:
             if not os.path.exists(fname):
@@ -276,13 +298,6 @@ if __name__ == "__main__":
             else:
                 print("Unable to read %s." % fname)
             sys.exit(1)
-
-    if not isatty(sys.stdin.isatty()):
-        request_data = sys.stdin.read()
-        if len(request_data) > 0:
-            if options.verbose:
-                print(f"Sending from stdin:\n{request_data}")
-            send_epp(request_data)
 
     if not options.testing:
         epp.close()
