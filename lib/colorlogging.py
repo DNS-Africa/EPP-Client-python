@@ -74,17 +74,9 @@ import logging.handlers
 import os
 import sys
 
+logging.basicConfig(force=True)
 log = logging.getLogger('root')
 
-def resetLogging(level=logging.ERROR):
-    """Remove all current logging config"""
-    logging._acquireLock()
-    try:
-        logging.root = logging.RootLogger(level)
-        logging.Logger.root = logging.root
-        logging.Logger.manager = logging.Manager(logging.Logger.root)
-    finally:
-        logging._releaseLock()
 
 def enableLogging(debug=False, color=True, console=True, syslog=False, forceisatty=False):
   """Turn on logging. Default Loglevel is info. For use when full blown xml base config is overkill.
@@ -92,7 +84,6 @@ def enableLogging(debug=False, color=True, console=True, syslog=False, forceisat
      The forceisatty will always put out color output.
      Note: this will configure the 'root' logger only. For more complicated usage the dic
   """
-  resetLogging() #Wipe out current config
   logging.config.dictConfig({ #Blank any existing logging config
       'version': 1,
   })
