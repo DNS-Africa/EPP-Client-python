@@ -1,0 +1,3 @@
+#!/bin/bash
+# Just echo a Hello World message
+echo "Image already pushed to Docker Hub (by buildx)"
