@@ -40,12 +40,8 @@ Options:
   -h, --help            show this help message and exit
   --host=HOST, --ip=HOST
                         Host to connect to [127.0.0.1]
-  -p PORT, --port=PORT  Port to connect to [8443]
+  -p PORT, --port=PORT  Port to connect to [3121]
   -c CERT, --cert=CERT  SSL certificate to use for authenticated connections
-  -s SSLVERSION, --sslversion=SSLVERSION
-                        The ssl version identifier {SSLv2, SSLv3, SSLv23,
-                        TLSv1}
-  --nossl               Do not use SSL
   -v, --verbose         Show the EPP server greeting and other debug info
   -u USERNAME, --username=USERNAME
                         Username to login with. If not specified will assume
@@ -58,4 +54,8 @@ Options:
                         For scripting, any fields to be replaced (python
                         dictionary subsitution). Eg: -d DOMAIN=test.co.za will
                         replace %(DOMAIN)s with test.co.za
+  --svc=SVC             Add a services sent with the epp login command --svc
+                        'urn:ietf:params:xml:ns:host-1.0'
+  --svc-ext=SVC_EXT     Add a services extensions sent with the epp login
+                        command --svc-ext 'urn:ietf:params:xml:ns:secDNS-1.1'
 ```
