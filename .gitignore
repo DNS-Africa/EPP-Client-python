@@ -1,2 +1,10 @@
 wip
 __pycache__
+
+# Secrets - never commit registrar credentials
+.env
+testing/gia/.env
+
+# Suite runtime state (regenerated on every run)
+testing/gia/checklist.json
+testing/gia/CHECKLIST.md
