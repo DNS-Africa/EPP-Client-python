@@ -1,18 +1,24 @@
-"""Runner for the .de zone EPP test suite.
+"""Runner for the multi-zone EPP test suite (.de / .com / .africa).
+
+All zones use the same EPP edge and registrar credentials; the multiplexer
+routes each command to the registry OTE that owns the TLD. Per-zone policy
+differences (contact roles, contact creation, DNSSEC support) are carried by
+the zone profiles in :mod:`.zones`.
 
 Usage (from the repo root or anywhere the import works):
 
-    python3 -m testing.gia.suite --env testing/gia/.env
-    python3 -m testing.gia.suite --phase basic --only b-login,b-dom-create
-    python3 -m testing.gia.suite --keep --verbose
+    python3 -m testing.gia.suite --zone de
+    python3 -m testing.gia.suite --zone com --phase basic
+    python3 -m testing.gia.suite --zone all
+    python3 -m testing.gia.suite --zone de --only b-login,b-dom-create --keep -v
 
 Or, from ``testing/gia``:
 
-    python3 -m suite
+    python3 -m suite --zone all
 
-Every case is recorded in the persistent checklist (``checklist.json`` +
-``CHECKLIST.md``) as it runs. Exit code 0 when every executed case passed,
-1 otherwise.
+Every case is recorded in the persistent per-zone checklist
+(``checklists/<zone>/checklist.json`` + ``CHECKLIST.md``) as it runs.
+Exit code 0 when every executed case passed, 1 otherwise.
 """
 from __future__ import annotations
 
@@ -23,19 +29,20 @@ import time
 from datetime import datetime, timezone
 
 from . import checklist as ck
+from . import zones as zones_mod
 from .cases import PHASE_BASIC, PHASE_DNSSEC, build_cases, run_case
-from .epp import CT_NS, DOM_NS, EPPSession, SECDNS_NS, load_env, login_xml
+from .epp import CT_NS, DOM_NS, EPPSession, RGP_NS, SECDNS_NS, load_env, login_xml
 
 REQUIRED_KEYS = ("EPP_HOST", "EPP_PORT", "EPP_USER", "EPP_PASSWORD")
 
 CONNECT_CASE = {"basic": "b-connect", "secdns": "s-connect"}
 
-# Per-session login parameters, used when a cleanup case must re-open a
-# session the registry killed (e.g. OTE closes the connection on
-# secDNS:add, which would otherwise strand the cleanup delete).
+# Per-session login parameters, used when a session must be re-opened
+# (e.g. the registry killed it, or it went stale while idle).
 SESSION_LOGINS = {
     "basic": ([DOM_NS, CT_NS], ()),
     "basic-poll": ([DOM_NS, CT_NS], ()),
+    "basic-rgp": ([DOM_NS, CT_NS], (RGP_NS,)),
     "secdns": ([DOM_NS], (SECDNS_NS,)),
 }
 
@@ -62,7 +69,7 @@ def _resolve_blocker(checklist, case):
     """First unmet prerequisite of *case*, reduced to its root cause.
 
     A prerequisite blocks when its status is FAIL, or BLOCKED (chained to a
-    FAIL root). PENDING/PASS/SKIPPED do not block.
+    FAIL root). PENDING/SKIPPED/PASS do not block.
     """
     for req in case.requires:
         entry = checklist.state["tests"].get(req, {})
@@ -75,49 +82,20 @@ def _resolve_blocker(checklist, case):
     return None
 
 
-def main(argv=None):
-    ap = argparse.ArgumentParser(
-        description="End-to-end EPP test suite for the .de zone "
-                    "(DAMSR -> rEngin -> multiplexer -> DENIC OTE)"
-    )
-    default_env = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"
-    )
-    ap.add_argument("--env", default=default_env,
-                    help="env file with credentials/defaults [%default]")
-    ap.add_argument("--out", default=None,
-                    help="directory for checklist.json / CHECKLIST.md "
-                         "[default: same dir as .env]")
-    ap.add_argument("--phase", choices=("all", "basic", "dnssec"), default="all",
-                    help="restrict the run to one phase [%(default)s]")
-    ap.add_argument("--only", default="",
-                    help="comma-separated case ids to run; all others keep "
-                         "their previous status")
-    ap.add_argument("--keep", action="store_true",
-                    help="skip cleanup cases (leave created objects in place)")
-    ap.add_argument("--verbose", "-v", action="store_true",
-                    help="print every request/response XML pair")
-    args = ap.parse_args(argv)
-
-    cfg = load_env(args.env)
-    missing = [k for k in REQUIRED_KEYS if not cfg.get(k)]
-    if missing:
-        print(f"error: missing required config key(s) in {args.env}: "
-              f"{', '.join(missing)}", file=sys.stderr)
-        return 2
-
+def run_zone(zone, cfg, args, out_dir):
+    """Run one zone's case list, updating its checklist; return summary counts."""
     host = cfg["EPP_HOST"]
     port = int(cfg.get("EPP_PORT", "3121"))
     timeout = int(cfg.get("EPP_TIMEOUT", "45"))
-    out_dir = args.out or os.path.dirname(os.path.abspath(args.env))
     os.makedirs(out_dir, exist_ok=True)
 
-    all_cases, ctx = build_cases(cfg)
+    all_cases, ctx = build_cases(cfg, zone)
     checklist = ck.Checklist(
         json_path=os.path.join(out_dir, "checklist.json"),
         md_path=os.path.join(out_dir, "CHECKLIST.md"),
-        target=f"{host}:{port} (k8s ns gia-dev)",
-        registrar=f"{cfg['EPP_USER']} ({cfg.get('DE_CONTACT_PREFIX', 'denic regacc')})",
+        target=f"{host}:{port} (k8s ns gia-dev, {zone.registry})",
+        registrar=cfg["EPP_USER"],
+        title=zone.tld,
     )
 
     # Select the cases for this run.
@@ -134,24 +112,21 @@ def main(argv=None):
     for case in all_cases:
         checklist.register(case.id, case.name, case.phase)
 
-    print(f".de EPP suite  —  target {host}:{port}  registrar {cfg['EPP_USER']}")
+    print(f"\n=== zone {zone.key} ({zone.registry})  target {host}:{port}  "
+          f"registrar {cfg['EPP_USER']}")
     print(f"domain={ctx.domain}  dnssec_domain={ctx.domain_ds}  "
-          f"contact={ctx.contact}")
+          f"contact={ctx.contact}  roles={ctx.role_handles}")
     print(f"running {len(selected)}/{len(all_cases)} cases "
           f"(phase={args.phase}, keep={args.keep})\n")
 
     sessions: dict = {}
-    results = {"PASS": 0, "FAIL": 0, "BLOCKED": 0}
     run_ts = _utcnow()
 
-    def get_session(name):
-        """Lazily open a session; record connection failure on first use."""
-        sess = sessions.get(name)
-        if sess is None:
-            sess = EPPSession(host, port, timeout=timeout)
-            sessions[name] = sess
-            print(f"  [session:{name}] connected (TLS {sess.sock.version()}, "
-                  f"greeting received)")
+    def open_session(name):
+        sess = EPPSession(host, port, timeout=timeout)
+        sessions[name] = sess
+        print(f"  [session:{name}] connected "
+              f"(TLS {sess.sock.version()})")
         return sess
 
     for case in selected:
@@ -159,7 +134,6 @@ def main(argv=None):
         blocker = _resolve_blocker(checklist, case)
         if blocker:
             entry = checklist.state["tests"].get(blocker, {})
-            results["BLOCKED"] += 1
             checklist.record(case.id, ck.BLOCKED,
                              error=f"blocked by {blocker}: "
                                    f"{(entry.get('error') or entry.get('detail') or 'no detail')[:200]}",
@@ -172,14 +146,10 @@ def main(argv=None):
         # 2. session (connect) - the connect case itself validates the greeting
         try:
             if case.session not in sessions:
-                sess = EPPSession(host, port, timeout=timeout)
-                sessions[case.session] = sess
-                print(f"  [session:{case.session}] connected "
-                      f"(TLS {sess.sock.version()})")
+                sess = open_session(case.session)
             else:
                 sess = sessions[case.session]
         except Exception as e:
-            results["FAIL"] += 1
             checklist.record(case.id, ck.FAIL,
                              error=f"TLS connect failed: {e}")
             checklist.save()
@@ -212,7 +182,6 @@ def main(argv=None):
                 except Exception as e:  # noqa: BLE001
                     reason = f"recovery failed: {type(e).__name__}: {e}"
             if not recovered:
-                results["BLOCKED"] += 1
                 checklist.record(case.id, ck.BLOCKED,
                                  error=f"session {case.session} unusable: {reason}",
                                  detail="EPP session lost",
@@ -221,7 +190,21 @@ def main(argv=None):
                 print(f"[BLOCKED ] {case.id:28s} session {case.session} lost")
                 continue
 
-        # 3. execute
+        # 3. secDNS gating: when the zone's OTE does not advertise secDNS-1.1
+        # in the greeting, the DNSSEC phase cannot be exercised; record the
+        # cases as SKIPPED (not FAILED) so the checklist stays clean.
+        if case.phase == PHASE_DNSSEC and case.id != "s-connect":
+            svcs, exts = sess.greeting_services()
+            if SECDNS_NS not in exts:
+                checklist.record(case.id, ck.SKIPPED,
+                                 error=(f"secDNS-1.1 not advertised in the "
+                                        f"{zone.registry} greeting"),
+                                 detail="DNSSEC phase not supported by this zone's OTE")
+                checklist.save()
+                print(f"[SKIP    ] {case.id:28s} secDNS-1.1 not advertised")
+                continue
+
+        # 4. execute
         if args.verbose:
             print(f"---- {case.id} : {case.name}")
         started = time.monotonic()
@@ -234,9 +217,41 @@ def main(argv=None):
                 "denic_codes": [], "detail": "", "blocked_by": None,
             }
         dur_ms = int((time.monotonic() - started) * 1000)
-        status = result["status"]
-        results[status] = results.get(status, 0) + 1
 
+        # 4.5 transport recovery: if the case's request itself lost the
+        # session (OTE drops idle connections, or crashes on an unhandled
+        # command), re-open the session, re-login and retry the case once -
+        # as a traditional EPP client would reconnect. OTE commands that
+        # deterministically kill the connection fail the retry too and keep
+        # their FAIL status.
+        if (result.get("status") == ck.FAIL
+                and str(result.get("error", "")).startswith("transport:")
+                and getattr(sess, "dead", False)
+                and case.session in SESSION_LOGINS):
+            try:
+                fresh = EPPSession(host, port, timeout=timeout)
+                svcs, exts = SESSION_LOGINS.get(case.session, ([DOM_NS, CT_NS], ()))
+                lr = fresh.request(
+                    login_xml(cfg["EPP_USER"], cfg["EPP_PASSWORD"], svcs, exts),
+                    f"login (recovery {case.session})",
+                )
+                if lr.ok:
+                    sessions[case.session] = fresh
+                    sess = fresh
+                    print(f"  [session:{case.session}] re-opened; retrying {case.id}")
+                    try:
+                        r2 = run_case(case, fresh, ctx)
+                    except Exception:  # noqa: BLE001
+                        r2 = None
+                    if r2 is not None and r2["status"] == ck.PASS:
+                        result = r2
+                        result["detail"] = (
+                            f"(after reconnect retry) {result.get('detail', '')}".strip()
+                        )
+            except Exception:  # noqa: BLE001 - recovery is best-effort
+                pass
+
+        status = result["status"]
         checklist.record(case.id, status,
                          error=result.get("error", ""),
                          denic_codes=result.get("denic_codes") or [],
@@ -244,7 +259,8 @@ def main(argv=None):
                          blocked_by=result.get("blocked_by"))
         checklist.save()
 
-        tag = {"PASS": "PASS    ", "FAIL": "FAIL    ", "BLOCKED": "BLOCKED "}[status]
+        tag = {"PASS": "PASS    ", "FAIL": "FAIL    ", "BLOCKED": "BLOCKED ",
+               "SKIPPED": "SKIP    "}[status]
         # On failure, prefer the concise error over the raw-XML detail.
         extra = (result.get('error') or result.get('detail') or "") \
             if status != ck.PASS else (result.get('detail') or "")
@@ -255,29 +271,91 @@ def main(argv=None):
         if getattr(sess, "dead", False):
             sessions[case.session] = "dead"
 
-    # 4. summary
+    # 5. summary
     counts = checklist.summary()
     total = sum(counts.values())
-    print("\n" + "=" * 72)
-    print(f"run finished {run_ts}: {counts.get(ck.PASS, 0)} PASS, "
+    print(f"zone {zone.key} finished {run_ts}: {counts.get(ck.PASS, 0)} PASS, "
           f"{counts.get(ck.FAIL, 0)} FAIL, "
           f"{counts.get(ck.BLOCKED, 0)} BLOCKED, "
+          f"{counts.get(ck.SKIPPED, 0)} SKIPPED, "
           f"{counts.get('PENDING', 0)} pending (of {total})")
 
     report = checklist.blocker_report()
-    print("\nCURRENTLY BLOCKING:")
     if report:
+        print(f"zone {zone.key} CURRENTLY BLOCKING:")
         for i, (cid, entry, deps) in enumerate(report, 1):
             err = (entry.get("error") or entry.get("detail") or "no detail")[:200]
             print(f"  {i}. {cid} — {err}")
             if deps:
                 print(f"     blocks {len(deps)} test(s): {', '.join(deps)}")
     else:
-        print("  none")
-    print("=" * 72)
+        print(f"zone {zone.key} CURRENTLY BLOCKING: none")
+
     print(f"checklist: {checklist.md_path}")
     print(f"state:     {checklist.json_path}")
 
+    return counts
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(
+        description="End-to-end EPP test suite for the .de / .com / .africa zones "
+                    "(DAMSR -> rEngin -> multiplexer -> registry OTE)"
+    )
+    default_env = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"
+    )
+    default_checklists = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "checklists"
+    )
+    ap.add_argument("--env", default=default_env,
+                    help="env file with credentials/defaults [%default]")
+    ap.add_argument("--zone", choices=zones_mod.all_zone_keys() + ["all"], default="de",
+                    help="which zone(s) to test [%(default)s]")
+    ap.add_argument("--out", default=None,
+                    help="checklist directory (single zone) or base directory "
+                         "holding per-zone subdirectories (--zone all)")
+    ap.add_argument("--phase", choices=("all", "basic", "dnssec"), default="all",
+                    help="restrict the run to one phase [%(default)s]")
+    ap.add_argument("--only", default="",
+                    help="comma-separated case ids to run; all others keep "
+                         "their previous status")
+    ap.add_argument("--keep", action="store_true",
+                    help="skip cleanup cases (leave created objects in place)")
+    ap.add_argument("--verbose", "-v", action="store_true",
+                    help="print every request/response XML pair")
+    args = ap.parse_args(argv)
+
+    cfg = load_env(args.env)
+    missing = [k for k in REQUIRED_KEYS if not cfg.get(k)]
+    if missing:
+        print(f"error: missing required config key(s) in {args.env}: "
+              f"{', '.join(missing)}", file=sys.stderr)
+        return 2
+
+    if args.zone == "all":
+        out_base = args.out or default_checklists
+        zone_counts = {}
+        for key in zones_mod.all_zone_keys():
+            zone = zones_mod.get_zone(key)
+            zone_counts[key] = run_zone(zone, cfg, args, os.path.join(out_base, key))
+
+        print("\n" + "=" * 72)
+        print(f"all zones finished {_utcnow()}")
+        for key in zones_mod.all_zone_keys():
+            c = zone_counts[key]
+            total = sum(c.values())
+            print(f"  {key:8s} {c.get(ck.PASS, 0):>3d} pass  "
+                  f"{c.get(ck.FAIL, 0):>3d} fail  {c.get(ck.BLOCKED, 0):>3d} blocked  "
+                  f"{c.get(ck.SKIPPED, 0):>3d} skipped  "
+                  f"(of {total})  -> {os.path.join(out_base, key, 'CHECKLIST.md')}")
+        print("=" * 72)
+        return 0 if all(c.get(ck.FAIL, 0) == 0 and c.get(ck.BLOCKED, 0) == 0
+                        for c in zone_counts.values()) else 1
+
+    zone = zones_mod.get_zone(args.zone)
+    out_dir = args.out or os.path.join(default_checklists, args.zone)
+    counts = run_zone(zone, cfg, args, out_dir)
     return 0 if (counts.get(ck.FAIL, 0) == 0 and counts.get(ck.BLOCKED, 0) == 0) else 1
 
 

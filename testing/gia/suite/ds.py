@@ -3,7 +3,8 @@
 DENIC stores DNSSEC data inline as ``dnsentry:dnsentry`` elements
 (xsi:type=A/AAAA/NS/MX/DNSKEY); there is no separate DS-record object model.
 The EPP side exposes DNSSEC management via the secDNS-1.1 extension
-(``domain:secDNS:add`` / ``rem`` / ``info``).
+(RFC 5910): ``<secDNS:update>`` on ``domain:update`` and ``<secDNS:infData>``
+on the ``domain:info`` response.
 
 A DS record is derived from a DNSKEY:
 
@@ -13,7 +14,7 @@ with the digest computed over the canonical DNSKEY RDATA
 (flags(2) protocol(1) algorithm(1) public-key).
 
 This module builds a fresh RSA-style DNSKEY (random modulus, exponent 65537,
-algorithm RSASHA256 = 8, flags 256) and derives the matching DS digest. The
+algorithm RSASHA256 = 8, flags 257) and derives the matching DS digest. The
 public key is not cryptographically meaningful for testing purposes - the
 registry does not verify it - but every field is structurally valid, which is
 what secDNS validation cares about.
@@ -22,6 +23,7 @@ Stdlib only.
 """
 from __future__ import annotations
 
+import base64
 import hashlib
 import secrets
 import struct
@@ -30,8 +32,8 @@ import struct
 ALG = 8
 # DS digest type 2 = SHA-256
 DIGEST_TYPE = 2
-# Zone key (ZSK) flags.
-FLAGS = 256
+# Key-signing key (KSK, SEP bit set): the key a parent zone references.
+FLAGS = 257
 PROTOCOL = 3
 
 
@@ -69,6 +71,22 @@ class DSRecord:
         rdata = struct.pack(">HBB", FLAGS, PROTOCOL, ALG) + self.public
         self.digest = hashlib.sha256(_owner_wire(owner) + bytes([ALG, DIGEST_TYPE]) + rdata).hexdigest()
 
+    @property
+    def pub_key_b64(self) -> str:
+        return base64.b64encode(self.public).decode("ascii")
+
+    def sec_dns_key_xml(self, ns_prefix="secDNS"):
+        """RFC 5910 keyData interface (DNSKEY), for registries that store
+        keys rather than DS records (DENIC)."""
+        return (
+            f"<{ns_prefix}:keyData>"
+            f"<{ns_prefix}:flags>{FLAGS}</{ns_prefix}:flags>"
+            f"<{ns_prefix}:protocol>{PROTOCOL}</{ns_prefix}:protocol>"
+            f"<{ns_prefix}:alg>{ALG}</{ns_prefix}:alg>"
+            f"<{ns_prefix}:pubKey>{self.pub_key_b64}</{ns_prefix}:pubKey>"
+            f"</{ns_prefix}:keyData>"
+        )
+
     def sec_dns_add_xml(self, ns_prefix="secDNS"):
         return (
             f"<{ns_prefix}:dsData>"
@@ -77,10 +95,4 @@ class DSRecord:
             f"<{ns_prefix}:digestType>{DIGEST_TYPE}</{ns_prefix}:digestType>"
             f"<{ns_prefix}:digest>{self.digest}</{ns_prefix}:digest>"
             f"</{ns_prefix}:dsData>"
-        )
-
-    def sec_dns_rem_xml(self, ns_prefix="secDNS"):
-        return (
-            f"<{ns_prefix}:keyTag>{self.key_tag}</{ns_prefix}:keyTag>"
-            f"<{ns_prefix}:alg>{ALG}</{ns_prefix}:alg>"
         )

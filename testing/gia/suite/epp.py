@@ -11,12 +11,13 @@ import socket
 import ssl
 import struct
 import time
+import uuid
 
 EPP_NS = "urn:ietf:params:xml:ns:epp-1.0"
 DOM_NS = "urn:ietf:params:xml:ns:domain-1.0"
 CT_NS = "urn:ietf:params:xml:ns:contact-1.0"
 SECDNS_NS = "urn:ietf:params:xml:ns:secDNS-1.1"
-POLL_NS = "urn:ietf:params:xml:ns:poll-1.0"
+RGP_NS = "urn:ietf:params:xml:ns:rgp-1.0"
 
 
 def load_env(path):
@@ -55,6 +56,7 @@ class Response:
         self.msg = ""
         self.extvalue = ""
         self.resdata = ""
+        self.extension = ""
         self.cltrid = ""
         self.svtrid = ""
         self.denic_codes = []
@@ -89,6 +91,14 @@ class Response:
             re.findall(
                 r'<(?:[A-Za-z0-9_-]+:)?resData[^>]*>(.*?)'
                 r'</(?:[A-Za-z0-9_-]+:)?resData>',
+                self.raw, re.S,
+            )
+        )
+        # Response extensions (RFC 5730 <extension>), e.g. secDNS:infData.
+        self.extension = "\n".join(
+            re.findall(
+                r'<(?:[A-Za-z0-9_-]+:)?extension[^>]*>(.*?)'
+                r'</(?:[A-Za-z0-9_-]+:)?extension>',
                 self.raw, re.S,
             )
         )
@@ -205,7 +215,9 @@ class EPPSession:
         """
         if self.dead:
             raise SessionDead(self.dead_reason)
-        cltrid = f"SUITE-{int(time.time())}-{_seq.next()}"
+        # The edge rejects a reused clTRID (2002) across sessions, so a
+        # per-process token keeps parallel/back-to-back runs from colliding.
+        cltrid = f"SUITE-{int(time.time())}-{_RUN}-{_seq.next()}"
         xml = self.wrap(inner, cltrid)
         try:
             self._write_frame(xml)
@@ -252,6 +264,7 @@ class _Counter:
 
 
 _seq = _Counter()
+_RUN = uuid.uuid4().hex[:8]
 
 
 def login_xml(user, pw, services, extensions=()):

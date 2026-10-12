@@ -1,0 +1,11 @@
+# Ignore generated artifacts
+__pycache__/
+*.pyc
+.env
+checklists/*.json
+checklists/*
+
+# Ignore private keys and client certificates
+*.pem
+cert.pem
+key.pem

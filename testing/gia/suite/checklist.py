@@ -15,8 +15,9 @@ from datetime import datetime, timezone
 PASS = "PASS"
 FAIL = "FAIL"
 BLOCKED = "BLOCKED"
+SKIPPED = "SKIPPED"
 
-_SYMBOL = {PASS: "PASS", FAIL: "FAIL", BLOCKED: "BLOCKED"}
+_SYMBOL = {PASS: "PASS", FAIL: "FAIL", BLOCKED: "BLOCKED", SKIPPED: "SKIP"}
 
 
 def _now() -> str:
@@ -24,11 +25,12 @@ def _now() -> str:
 
 
 class Checklist:
-    def __init__(self, json_path, md_path, target, registrar):
+    def __init__(self, json_path, md_path, target, registrar, title="EPP"):
         self.json_path = json_path
         self.md_path = md_path
         self.target = target
         self.registrar = registrar
+        self.title = title
         self.state = {
             "meta": {
                 "target": target,
@@ -125,7 +127,7 @@ class Checklist:
         return report
 
     def summary(self):
-        counts = {PASS: 0, FAIL: 0, BLOCKED: 0, "PENDING": 0}
+        counts = {PASS: 0, FAIL: 0, BLOCKED: 0, SKIPPED: 0, "PENDING": 0}
         for t in self.state["tests"].values():
             counts[t.get("status") or "PENDING"] = counts.get(
                 t.get("status") or "PENDING", 0) + 1
@@ -164,6 +166,7 @@ class Checklist:
             "pass": c.get(PASS, 0),
             "fail": c.get(FAIL, 0),
             "blocked": c.get(BLOCKED, 0),
+            "skipped": c.get(SKIPPED, 0),
             "pending": c.get("PENDING", 0),
             "total": total,
         }
@@ -171,14 +174,15 @@ class Checklist:
     def _render(self):
         counts = self._summary_counts()
         lines = []
-        lines.append("# .de zone test checklist")
+        lines.append(f"# {self.title} zone test checklist")
         lines.append("")
         lines.append(f"- **Target:** {self.target}  ")
         lines.append(f"- **Registrar:** {self.registrar}  ")
         lines.append(f"- **Last run:** {self.state['meta']['last_run']}  ")
         lines.append(
             f"- **Result:** {counts['pass']} passed, {counts['fail']} failed, "
-            f"{counts['blocked']} blocked, {counts['pending']} pending "
+            f"{counts['blocked']} blocked, {counts['skipped']} skipped, "
+            f"{counts['pending']} pending "
             f"(of {counts['total']})"
         )
         lines.append("")
@@ -232,17 +236,20 @@ class Checklist:
         if self.state["runs"]:
             lines.append("## Run history")
             lines.append("")
-            lines.append("| When | Pass | Fail | Blocked | Pending |")
-            lines.append("|------|------|------|---------|---------|")
+            lines.append("| When | Pass | Fail | Blocked | Skipped | Pending |")
+            lines.append("|------|------|------|---------|---------|---------|")
             for r in reversed(self.state["runs"][-20:]):
                 lines.append(
-                    f"| {r['ts']} | {r['pass']} | {r['fail']} | {r['blocked']} | {r['pending']} |"
+                    f"| {r['ts']} | {r['pass']} | {r['fail']} | {r['blocked']} | {r.get('skipped', 0)} | {r['pending']} |"
                 )
             lines.append("")
         lines.append(
-            "> Chain under test: EPP client → DAMSR → rEngin → multiplexer → DENIC OTE. "
-            "Errors in any link show up here; use the DENIC codes to tell registry "
-            "rejections from translation/transport failures."
+            "> Chain under test: EPP client → DAMSR → rEngin → multiplexer → registry OTE. "
+            "Errors in any link show up here; registry-specific codes "
+            "(e.g. the 11-digit DENIC codes on .de) distinguish registry "
+            "rejections from translation/transport failures. "
+            "SKIP = the zone's OTE does not advertise the required extension "
+            "(e.g. secDNS-1.1), so the case was intentionally not exercised."
         )
         lines.append("")
         return "\n".join(lines)

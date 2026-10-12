@@ -75,8 +75,25 @@ Session and core EPP operations:
 | `b-dom-check-after-delete` | `domain:check` → `avail=1` (or still `avail=0` while the async grace-period suspension is pending) |
 | `b-ct-check-free` / `b-ct-create` / `b-ct-info` / `b-ct-update` / `b-ct-delete` / `b-ct-check-after-delete` | contact lifecycle (PERSON contact) |
 | `b-ct-info-missing` | info on unknown handle → `2303` |
-| `b-poll-empty` | poll the msg queue (read-only, never acks) |
+| `b-poll-empty` | `<poll op="req"/>` → `1300`, or `1301` with `<msgQ count id>` (read-only, never acks) |
 | `b-logout` | clean logout |
+
+### Registrar onboarding (`o-*`, zones with `onboarding=True`: currently `.de`)
+
+Day-to-day registrar operations, each expecting a clean RFC answer. The
+ordered fix list for `.de` is in [`diagnostics/de/ONBOARDING.md`](diagnostics/de/ONBOARDING.md).
+
+| Case | What it checks |
+|------|----------------|
+| `o-rfc-check-avail` | `domain:check` uses the RFC 5731 `domain:name/@avail` attribute |
+| `o-rfc-info-fields` | `domain:info` has `<domain:registrant>`, `roid`, `status` in RFC form |
+| `o-dom-update-ns-attr` / `o-dom-info-after-ns-attr` | NS swap with `hostAttr` (new hosts), visible in info |
+| `o-dom-update-contact` / `o-dom-info-after-contact` | swap the tech contact |
+| `o-dom-chholder` / `o-dom-info-after-chholder` | `chg/registrant` (DENIC holder change); `DE_ALT_REGISTRANT` overrides the target |
+| `o-dom-update-authinfo` / `o-dom-info-after-authinfo` | change the transfer code |
+| `o-dom-renew` | `domain:renew` → 1000 or a clean 2xxx refusal, never 2400 |
+| `o-dom-transfer-query` / `o-dom-transfer-own` | transfer query (1000/2301); request on own domain → 2106 |
+| `o-rfc-greeting-rgp` / `o-dom-restore` / `o-dom-info-after-restore` / `o-dom-delete-final` | RFC 3915 restore of the deleted domain, then delete again |
 
 ### DNSSEC (`s-*`)
 
@@ -87,11 +104,11 @@ domain:
 |------|----------------|
 | `s-connect` / `s-login` | greeting advertises secDNS; login with the extension |
 | `s-dom-create` | create the DNSSEC target domain |
-| `s-secdns-add` | `domain:secDNS:add` a generated DS record (RSASHA256/SHA-256, keyTag per RFC 4034) |
-| `s-secdns-info` | `domain:secDNS:info` shows the DS record |
-| `s-secdns-rem` | `domain:secDNS:rem` removes it |
+| `s-secdns-add` | `domain:update` + `<secDNS:update><secDNS:add>` (RFC 5910) with a generated key: `dsData` by default, `keyData` (DNSKEY) on zones with `secdns_interface="key"` (`.de`, since DENIC stores DNSKEYs) |
+| `s-secdns-info` | `domain:info` returns the DS in the `<secDNS:infData>` response extension |
+| `s-secdns-rem` | `domain:update` + `<secDNS:rem>` (full dsData) removes it |
 | `s-secdns-info-after-rem` | no DS data remains |
-| `s-secdns-rem-missing` | removing a non-matching DS → `2304` |
+| `s-secdns-rem-missing` | removing a DS that was never added → `2303`/`2304`/`2306` |
 | `s-dom-delete` | cleanup |
 | `s-logout` | clean logout |
 
@@ -112,21 +129,30 @@ tolerates or asserts on all of these:
   (`ns1.denic.de.`) — compare normalized, never by raw string.
 - **`domain:update` element order.** The schema wants `add` before `rem`
   (`rem` first → `2001` "Expected is (domain:chg)").
-- **`contact:voice` pattern.** OTE-specific dotted E.164:
+- **`contact:voice` pattern.** Standard RFC 5733 dotted E.164
   `(+[0-9]{1,3}\.[0-9]{1,14})?` — default `+27.215550101` (override via
   `DE_CONTACT_PHONE`).
-- **`contact:id` maxLength 16.** Denic-style 29-char handles are rejected;
-  the suite uses short `gia…` handles.
+- **`contact:id` maxLength 16.** RFC 5730 `clIDType` (3–16 chars), so
+  Denic-style 29-char handles are rejected; the suite uses short `gia…` handles.
+- **The edge schema-validates requests.** DAMSR checks every command against
+  the RFC XSDs and answers `2001` on a violation, e.g. `contact:addr` must be
+  `street*, city, sp?, pc?, cc` (RFC 5733).
 - **Duplicate create = `2302`** (object exists); the suite accepts
   `2302|2305`.
 - **Logout success = `1500** ("Command completed successfully; ending
   session"); the suite accepts `1500|1000`.
 - **Async delete = `1001`** (pending grace-period suspension); after delete
   `domain:check` keeps reporting `avail=0` until the grace period lapses.
-- **Unsupported services drop the connection.** `poll` and
-  `domain:secDNS:*` are not advertised in the greeting and OTE closes the
-  TCP connection on the command instead of returning an EPP error — those
-  cases fail at the transport level on purpose.
+- **Poll is a core command, not an object service.** It is sent as
+  `<poll op="req"/>` and is never advertised in the greeting. (Earlier
+  versions of this suite sent a non-existent `poll-1.0` form and the edge
+  dropped the connection; that was a client bug.)
+- **secDNS is a command extension (RFC 5910).** DS changes ride on
+  `domain:update` as `<extension><secDNS:update>`, and DS data comes back
+  in the `domain:info` `<extension><secDNS:infData>`. There are no
+  `<add>`/`<rem>`/`domain:secDNS:*` commands. (Earlier versions sent those,
+  which isn't even namespace-well-formed XML, and the edge dropped the
+  connection; that was a client bug.)
 - **New nameservers cannot be added.** `host:create` → `2101` (Host Creation
   Unsupported) and OTE validates `hostObj` against its internal host mirror,
   so `domain:update` with a new NS fails `2303` "Host does not exist". The
@@ -164,5 +190,7 @@ per-run random labels so they stay deterministic between runs.
   [`docs/error-codes.md`](docs/error-codes.md).
 - Translation-layer contract (code/status mapping, poll behaviour, known
   v1 limitations): [`docs/translation-design.md`](docs/translation-design.md).
+- Per-failure write-ups with root-cause analysis and proposed fixes for the
+  chain team: [`diagnostics/`](diagnostics/README.md).
 - To see what actually reached the wire, run with `--verbose` and compare the
   request XML against the RRI examples in `docs/commands/`.
