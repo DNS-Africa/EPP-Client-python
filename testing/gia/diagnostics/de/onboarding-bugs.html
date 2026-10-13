@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>.de Onboarding Bugs</title>
+<meta name="description" content="Open bugs blocking .de (DENIC) onboarding on the GIA gateway, by where the fix goes: rEngin, DAMSr, Policy, Templates.">
+<style>
+:root {
+  --bg: #f7f7f5; --surface: #ffffff; --surface-2: #f0efeb; --border: #e2e0da;
+  --text: #1d1c1a; --muted: #6b6862; --accent: #2f5fd0; --accent-soft: #e6ecfb;
+  --p0: #b42318; --p0-soft: #fde8e6; --high: #b54708; --high-soft: #fdf0e1;
+  --med: #4a5568; --med-soft: #eceef2; --low: #3f6b4f; --low-soft: #e5f1e9;
+  --c-rengin: #6941c6; --c-damsr: #0e7090; --c-policy: #b54708; --c-templates: #2f5fd0; --c-setup: #6b6862;
+  --shadow: 0 1px 2px rgba(0,0,0,.05);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141413; --surface: #1d1c1a; --surface-2: #262522; --border: #34322e;
+    --text: #ecebe7; --muted: #a09d96; --accent: #8fb0ff; --accent-soft: #23304f;
+    --p0: #ff8a80; --p0-soft: #3d1d1a; --high: #ffb86b; --high-soft: #3a2a17;
+    --med: #c3c9d4; --med-soft: #2a2d33; --low: #9fd3b0; --low-soft: #1f3127;
+    --c-rengin: #b69cff; --c-damsr: #6fd3ef; --c-policy: #ffb86b; --c-templates: #8fb0ff; --c-setup: #a09d96;
+    --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141413; --surface: #1d1c1a; --surface-2: #262522; --border: #34322e;
+  --text: #ecebe7; --muted: #a09d96; --accent: #8fb0ff; --accent-soft: #23304f;
+  --p0: #ff8a80; --p0-soft: #3d1d1a; --high: #ffb86b; --high-soft: #3a2a17;
+  --med: #c3c9d4; --med-soft: #2a2d33; --low: #9fd3b0; --low-soft: #1f3127;
+  --c-rengin: #b69cff; --c-damsr: #6fd3ef; --c-policy: #ffb86b; --c-templates: #8fb0ff; --c-setup: #a09d96;
+  --shadow: none;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code { font: 12.5px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--surface-2);
+  padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+.wrap { max-width: 1040px; margin: 0 auto; padding: 28px 16px 64px; }
+header h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: -.01em; }
+header .sub { color: var(--muted); margin: 0 0 14px; }
+.sources { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+.sources a { background: var(--surface); border: 1px solid var(--border); border-radius: 999px;
+  padding: 4px 12px; font-size: 13px; }
+.callout { background: var(--p0-soft); border: 1px solid color-mix(in srgb, var(--p0) 35%, transparent);
+  border-radius: 10px; padding: 12px 14px; margin: 0 0 12px; font-size: 14px; }
+.callout.info { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
+.callout strong { color: var(--p0); }
+.callout.info strong { color: var(--accent); }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 18px 0; }
+.stat { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px;
+  cursor: pointer; text-align: left; color: inherit; font: inherit; box-shadow: var(--shadow); }
+.stat[aria-pressed="true"] { outline: 2px solid var(--accent); outline-offset: -2px; }
+.stat .n { font-size: 26px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.stat .l { color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 6px; }
+.dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex: none; }
+.controls { position: sticky; top: 0; z-index: 2; background: var(--bg); padding: 10px 0;
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center; border-bottom: 1px solid var(--border); }
+.controls input[type=search] { flex: 1 1 220px; min-width: 0; padding: 8px 12px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; }
+.chip { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 999px;
+  padding: 5px 11px; font: inherit; font-size: 13px; cursor: pointer; }
+.chip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.btn { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 8px;
+  padding: 6px 12px; font: inherit; font-size: 13px; cursor: pointer; }
+label.toggle { font-size: 13px; color: var(--muted); display: flex; gap: 6px; align-items: center; cursor: pointer; }
+h2.group { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+  margin: 26px 0 10px; display: flex; align-items: center; gap: 8px; }
+h2.group .where { color: var(--text); text-transform: none; letter-spacing: 0; font-weight: 500; }
+.card { background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--comp);
+  border-radius: 10px; margin-bottom: 10px; box-shadow: var(--shadow); }
+.card.done { opacity: .55; }
+.card.done .title { text-decoration: line-through; }
+.card > summary { list-style: none; cursor: pointer; padding: 12px 14px; display: grid;
+  grid-template-columns: auto auto 1fr auto; gap: 10px; align-items: start; }
+.card > summary::-webkit-details-marker { display: none; }
+.card .id { font: 600 12.5px/1.6 ui-monospace, Menlo, monospace; color: var(--comp); }
+.card .title { font-weight: 600; }
+.card .meta { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.badge { font-size: 11.5px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.pr-P0 { background: var(--p0-soft); color: var(--p0); }
+.pr-High { background: var(--high-soft); color: var(--high); }
+.pr-Medium { background: var(--med-soft); color: var(--med); }
+.pr-Low { background: var(--low-soft); color: var(--low); }
+.st { background: var(--surface-2); color: var(--muted); }
+.st-fix { background: var(--low-soft); color: var(--low); }
+.body { padding: 0 14px 14px 14px; border-top: 1px solid var(--border); }
+.body h4 { margin: 12px 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.body p { margin: 0 0 6px; }
+.body ul { margin: 4px 0 0; padding-left: 18px; }
+.body li { margin: 2px 0; }
+.steps { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
+.step { font: 12px ui-monospace, Menlo, monospace; background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: 6px; padding: 1px 6px; color: var(--text); }
+.step.suite { border-style: dashed; }
+input.donebox { width: 16px; height: 16px; margin: 3px 0 0; accent-color: var(--accent); cursor: pointer; }
+.empty { color: var(--muted); padding: 24px; text-align: center; display: none; }
+section.notes { margin-top: 30px; display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+.panel h3 { margin: 0 0 8px; font-size: 15px; }
+.panel ol, .panel ul { margin: 0; padding-left: 20px; }
+.panel li { margin: 3px 0; }
+footer { margin-top: 28px; color: var(--muted); font-size: 13px; }
+.toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg);
+  padding: 8px 14px; border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+.toast.show { opacity: 1; }
+@media (max-width: 640px) {
+  .card > summary { grid-template-columns: auto 1fr; }
+  .card .meta { grid-column: 2; justify-content: flex-start; }
+  .card .id { grid-column: 2; grid-row: 1; }
+  .card .title { grid-column: 2; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>.de onboarding: open bugs</h1>
+  <p class="sub">GIA gateway → DENIC OTE · as of 13 Oct 2026 · grouped by where the fix goes</p>
+  <div class="sources">
+    <a href="https://dnsbusiness.atlassian.net/browse/POL-1096">Jira POL-1096</a>
+    <a href="https://docs.google.com/spreadsheets/d/1eRJfzcB40vEmCPF8-fFSGDKI1cRaxQtuTELgeBPr7jQ/edit">Run sheet 12 Oct (487 pass / 120 fail)</a>
+    <a href="https://github.com/DNS-Africa/EPP-Client-python/blob/testing/rfc-valid-epp-de-onboarding/testing/gia/diagnostics/de/ONBOARDING.md">ONBOARDING.md</a>
+    <a href="https://github.com/DNS-Africa/EPP-Client-python/blob/testing/rfc-valid-epp-de-onboarding/testing/gia/suite/cases.py">EPP suite (testing/gia)</a>
+  </div>
+  <div class="callout"><strong>Security:</strong> the DENIC OTE transport password is posted in plain text in the 12 Oct comment on
+    <a href="https://dnsbusiness.atlassian.net/browse/POL-1096">POL-1096</a>. Rotate it and edit the comment.</div>
+  <div class="callout info"><strong>Changed since 12 Oct:</strong> a plain .de <code>domain:create</code> on 13 Oct returned
+    “Domain Create <em>WITHOUT NAMESERVERS</em> completed successfully”; on 12 Oct the same create returned plain success. See P13.</div>
+</header>
+
+<div class="stats" id="stats" role="group" aria-label="Filter by component"></div>
+
+<div class="controls">
+  <input type="search" id="q" placeholder="Search issues, steps, cases…" aria-label="Search">
+  <span id="prchips"></span>
+  <label class="toggle"><input type="checkbox" id="hidedone"> Hide done</label>
+  <button class="btn" id="copy" title="Copy the visible open issues as a Markdown checklist">Copy as checklist</button>
+</div>
+
+<div id="list"></div>
+<div class="empty" id="empty">No issues match these filters.</div>
+
+<section class="notes">
+  <div class="panel">
+    <h3>Suggested order</h3>
+    <ol>
+      <li><b>R1 + P1</b>: unblock every .de domain update (P1's fix is already on a branch).</li>
+      <li><b>P2, P3, T2</b>: clear the 2400s (renew, auto-renew, transfer charge).</li>
+      <li><b>P4–P8</b>: route transfer, holder change, restore and authInfo to the DENIC commands.</li>
+      <li><b>D1</b>: let restore through the edge.</li>
+      <li>Investigate <b>P10, P11, P13</b> with Loki.</li>
+    </ol>
+  </div>
+  <div class="panel">
+    <h3>Not bugs: test setup and data</h3>
+    <ul>
+      <li><b>Remote-registry checks not set up</b>: <code>ssh: Could not resolve hostname epp_via</code> (11.01 and others). This accounts for most of the 64 failed check steps, plus the 14 “Domain doesn't exist” knock-ons.</li>
+      <li><b>No second OTE user</b>, so transfers between registrars can't be tested (2301, 2201 “cannot approve”, 2201 “not domain owner”).</li>
+      <li><b>Premium price in test data</b> (19.03, 36.06, 37.03, 51.05): already removed by Jon.</li>
+      <li><b>Expected results</b>: 00.x “Contact does not exist” are pre-create checks; 03.50 is the agreed “no AGP credit”.</li>
+    </ul>
+  </div>
+</section>
+
+<footer>
+  Legend: <span class="step">05.06</span> = step in the 12 Oct run sheet ·
+  <span class="step suite">o-dom-renew</span> = case in the EPP suite (<code>python3 -m suite --zone de</code>).
+  “Done” ticks are saved in this browser only.
+</footer>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const GH = "https://github.com/DNS-Africa";
+const LIBS = `${GH}/policy_gw_libs/blob/9fa286c5f1e3ac5bd9c0c6a889ac2a36e67d41f1`;
+const RENGIN = `${GH}/rEngin/blob/8128ef46829a8acac53363b1fa590d4a62453888`;
+const DENICPOL = `${GH}/policy_gw_denic/blob/976ec5fa2d3fdae3375ee1e94209e01ef85d87a9`;
+const SUITE = `${GH}/EPP-Client-python/blob/testing/rfc-valid-epp-de-onboarding/testing/gia`;
+const JIRA = "https://dnsbusiness.atlassian.net/browse/POL-1096";
+const SHEET = "https://docs.google.com/spreadsheets/d/1eRJfzcB40vEmCPF8-fFSGDKI1cRaxQtuTELgeBPr7jQ/edit";
+const RFC = (n, s) => `https://www.rfc-editor.org/rfc/rfc${n}${s ? "#section-" + s : ""}`;
+
+const COMPONENTS = [
+  { key: "Policy",    label: "Policy",    where: "policy_gw_denic / policy_gw_libs", color: "var(--c-policy)" },
+  { key: "rEngin",    label: "rEngin",    where: "Gateway + DENIC RRI translation",  color: "var(--c-rengin)" },
+  { key: "Templates", label: "Templates", where: "transport 54 “Denic-test” (template table)", color: "var(--c-templates)" },
+  { key: "DAMSr",     label: "DAMSr",     where: "EPP edge",                          color: "var(--c-damsr)" },
+];
+const PRIORITIES = ["P0", "High", "Medium", "Low"];
+
+const ISSUES = [
+  // ---------------------------------------------------------------- Policy
+  { id: "P1", comp: "Policy", pr: "P0", status: "Fix on branch, not deployed", fixed: true,
+    title: "NS changes return 2400: Domain-Update host sync ignores SyncDomainHosts",
+    what: "Domain-Update calls <code>Gateway.synchroniseDomainHosts</code> whenever NS are added or removed. DENIC has no host objects or <code>Host_Create</code> template, so it fails with <code>TemplateNotFound: 398_Host_Create</code> → 2400. Domain-Create already checks <code>SyncDomainHosts</code> (false for .de).",
+    fix: "Merge and deploy <code>policy_gw_libs</code> <code>9fa286c</code> (branch <code>denic-gateway-host-sync</code>, Domain-Update-016). It isn't in <code>dev</code> or <code>master</code>; the deployed libs (<code>030-5.13.6209-dev</code>) only have the Domain-Create half.",
+    steps: ["43.07", "43.35", "43.40"], cases: ["b-dom-update-ns", "o-dom-update-ns-attr"],
+    links: [["Fix: Domain-Update.xml L119–121", `${LIBS}/Domain-Update.xml#L119-L121`],
+            ["Domain-Create.xml SyncHosts L123–140", `${LIBS}/Domain-Create.xml#L123-L140`]] },
+  { id: "P2", comp: "Policy", pr: "High", status: "Open",
+    title: "Renew and auto-renew call a DENIC renew that doesn't exist",
+    what: "Renew and <code>Pre_Auto_Renew</code> send a remote <code>Domain Renew</code>. DENIC RRI has no renew request (19 requests, none is renew) and .de contracts run for an indefinite period (DENIC terms §7(1), see Jon's 13 Oct comment). The transport has no <code>Domain_Renew</code> template → 2400 / policy error.",
+    fix: "For .de, bill and extend the local expiry only. Never call the gateway for renew.",
+    steps: ["05.06", "17.20", "42.16", "28.28", "34.28"], cases: ["o-dom-renew"],
+    links: [["Jon's renew research (POL-1096)", JIRA], ["Pre_Auto_Renew remote Renew L102", `${LIBS}/Domain-Pre_Auto_Renew.xml#L102`]] },
+  { id: "P3", comp: "Policy", pr: "High", status: "Open",
+    title: "Transfer charge looks up a premium product: 'de_transfer_premium'",
+    what: "Local transfer fails with 2400 “Unable to locate product code 'de_transfer_premium'”. .de is flat-price and has no premium tier.",
+    fix: "Remove the premium suffix/category logic from the .de create, transfer and renew charges so only the standard <code>de_*</code> products are used.",
+    steps: ["12.11", "36.12"], cases: [],
+    links: [["Run sheet", SHEET], ["Premium note (POL-1096)", JIRA]] },
+  { id: "P4", comp: "Policy", pr: "Medium", status: "Open; needs 2nd OTE user",
+    title: "Transfers use the EPP Transfer_* flow; DENIC uses chprov",
+    what: "The policy calls <code>Transfer_Request/Query/Approve/Reject/Cancel</code> templates; the transport only has <code>Domain_Chprov</code>. DENIC's provider change is immediate with an AuthInfo and has no approve/reject step.",
+    fix: "Map transfer request → <code>Domain_Chprov</code>. Answer approve, reject and cancel with a clean 2101. Retest once a second OTE registrar account exists.",
+    steps: ["07.x", "08.x", "09.x", "10.x", "21.x", "36.x", "39.x", "51.x"], cases: ["o-dom-transfer-query", "o-dom-transfer-own"],
+    links: [["DENIC chprov reference", `${SUITE}/docs/commands/domainchprov.md`]] },
+  { id: "P5", comp: "Policy", pr: "Medium", status: "Open",
+    title: "Holder change goes through Domain_Update; DENIC requires chholder",
+    what: "<code>domain:update chg/registrant</code> is sent as a full <code>domain:update</code>. DENIC requires <code>domain:chholder</code> for holder changes (the Domain_Update template says so too). The <code>Domain_Chholder</code> template exists but is never called.",
+    fix: "Route registrant changes to <code>Domain_Chholder</code>. See also T1 for the contact-create failure on the same path.",
+    steps: [], cases: ["o-dom-chholder", "o-dom-info-after-chholder"],
+    links: [["DENIC chholder reference", `${SUITE}/docs/commands/domainchholder.md`]] },
+  { id: "P6", comp: "Policy", pr: "Medium", status: "Decision needed",
+    title: "Admin/tech contacts: block, ignore, or create DENIC REQUEST contacts",
+    what: "DENIC's <code>generalrequest</code> and <code>abusecontact</code> roles must be REQUEST-type contacts (URI template, no postal data). The zone's <code>SyncContactList</code> covers the registrant only, so admin/tech updates fail or drift.",
+    fix: "Decide: block (2306), ignore, or derive REQUEST contacts (Jon's June proposal: <code>DENIC-470-Q-&lt;handle&gt;</code> alongside <code>-R-</code> for PERSON/ORG).",
+    steps: ["06.16", "06.24"], cases: ["o-dom-update-contact"],
+    links: [["Contact type notes (POL-1096, 3 Jun)", JIRA]] },
+  { id: "P7", comp: "Policy", pr: "Medium", status: "Open",
+    title: "Restore calls Restore_Request/Restore_Report; transport has Domain_Restore",
+    what: "The policy's restore path names templates that don't exist on the .de transport.",
+    fix: "Call <code>Domain_Restore</code> (or rename the template) and drop the report step DENIC doesn't have. Blocked from testing by D1.",
+    steps: [], cases: ["o-dom-restore"],
+    links: [["DENIC restore reference", `${SUITE}/docs/commands/domainrestore.md`]] },
+  { id: "P8", comp: "Policy", pr: "Medium", status: "Open",
+    title: "AuthInfo change goes through Domain_Update; DENIC uses createAuthInfo1",
+    what: "Setting a transfer code is sent as <code>domain:update</code> and fails at DENIC's schema check. DENIC sets AuthInfo with <code>domain:createAuthInfo1</code> (hash + expiry).",
+    fix: "Route <code>chg/authInfo</code> to <code>Domain_Create_AuthInfo1</code>.",
+    steps: ["07.0101"], cases: ["o-dom-update-authinfo", "o-dom-info-after-authinfo"],
+    links: [["DENIC createAuthInfo1 reference", `${SUITE}/docs/commands/domaincreate-authinfo1.md`]] },
+  { id: "P9", comp: "Policy", pr: "Low", status: "Decision needed",
+    title: "Client status updates (clientHold) have no DENIC equivalent",
+    what: "Adding <code>clientHold</code> fails with DENIC 2002 (it goes through the same broken update path as R1). DENIC has no client-set statuses.",
+    fix: "Decide: keep client statuses local only, or reject with 2306.",
+    steps: ["40.05"], cases: [], links: [["Run sheet", SHEET]] },
+  { id: "P10", comp: "Policy", pr: "Medium", status: "Investigate (Loki)",
+    title: "ExpirationDeletion / Pre_Auto_Delete fail on a domain with clientHold",
+    what: "The timers end in status <code>failed</code>. The rengin pod's logs have rotated past the run, so the error text needs Loki.",
+    fix: "Pull the timer run from Loki, then fix in policy.",
+    steps: ["40.48"], cases: [], links: [["Run sheet", SHEET]] },
+  { id: "P11", comp: "Policy", pr: "Medium", status: "Investigate (Loki)",
+    title: "Local transfer rejects a correct authInfo with 2202",
+    what: "“Authorization failed, Invalid authorization information” on local transfers. Checked 13 Oct: the authInfo set on create is stored correctly and survives SyncAfterCreate, so the fault is in the transfer validation itself.",
+    fix: "Trace one transfer request in Loki (policy validation vs. a remote lookup).",
+    steps: ["07.03", "08.03", "09.03", "10.03"], cases: [], links: [["Run sheet", SHEET]] },
+  { id: "P12", comp: "Policy", pr: "Medium", status: "Open (all zones)",
+    title: "Create hides registry host failures and still returns 1000",
+    what: "When the registry refuses a host (Verisign 2201 “Registrar does not own the parent domain”), <code>UpdateMissingHosts</code> falls back to a local create without hosts and returns 1000 “WITHOUT NAMESERVERS”. The domain sits inactive at the registry and the registrar only sees a message string.",
+    fix: "Return a 2xxx carrying the registry reason (or at least don't report success).",
+    steps: [], cases: [],
+    links: [["Domain-Create.xml UpdateMissingHosts L132–209", `${LIBS}/Domain-Create.xml#L132-L209`]] },
+  { id: "P13", comp: "Policy", pr: "Medium", status: "Investigate",
+    title: "Since 13 Oct, a plain .de create returns “WITHOUT NAMESERVERS”",
+    what: "A .de create with hostObj ns1/ns2 returned plain success on 12 Oct and “Domain Create WITHOUT NAMESERVERS completed successfully” on 13 Oct. With <code>SyncDomainHosts</code> false the host step should be skipped, so something was deployed or reconfigured.",
+    fix: "Check the 13 Oct changes to the zone config and policy for <code>de</code>.",
+    steps: [], cases: ["b-dom-create"], links: [["Domain-Create.xml L140", `${LIBS}/Domain-Create.xml#L140`]] },
+  // ---------------------------------------------------------------- rEngin
+  { id: "R1", comp: "rEngin", pr: "P0", status: "Open",
+    title: "Every .de domain update is rejected: the gateway passes only the change",
+    what: "DENIC's <code>domain:update</code> replaces the whole domain (holder, contacts, NS, DNSKEY); the <code>Domain_Update</code> template expects that full state. The gateway passes only the EPP change, e.g. <code>{name, chg: {authInfo}}</code>, so the holder is empty and NS are missing → DENIC 83000000004 “Validation of XML request against Schema failed” (EPP 2002).",
+    fix: "For the DENIC transport, merge the change onto the domain's current state (local mirror or a fresh Domain_Info) before rendering Domain_Update.",
+    steps: ["06.06", "07.0101", "40.05"], cases: ["o-dom-update-contact", "o-dom-update-authinfo", "s-secdns-add"],
+    links: [["Gateway.sendRequest", `${RENGIN}/src/lib/elib/Gateway.py#L1554`]] },
+  { id: "R2", comp: "rEngin", pr: "Medium", status: "Open",
+    title: "DENIC responses aren't RFC 5731",
+    what: "<code>domain:check</code> emits <code>&lt;domain:avail&gt;</code> as an element with no <code>&lt;domain:cd&gt;</code> wrapper; RFC 5731 requires <code>&lt;domain:cd&gt;&lt;domain:name avail=\"1\"&gt;</code>. Remote info emits <code>&lt;domain:contact type=\"registrant\"&gt;</code>, which isn't a valid contact type.",
+    fix: "Fix <code>_map_check_data</code> and the info contact mapping in <code>denic_rri.py</code>.",
+    steps: [], cases: ["o-rfc-check-avail", "o-rfc-info-fields"],
+    links: [["denic_rri._map_check_data L550", `${RENGIN}/src/lib/elib/translation/denic_rri.py#L550-L565`],
+            ["RFC 5731 §3.1.1", RFC(5731, "3.1.1")]] },
+  { id: "R3", comp: "rEngin", pr: "Low", status: "Open",
+    title: "DS data (dsData) is silently dropped for .de",
+    what: "DENIC stores DNSKEYs, and the template only maps <code>keyData</code>. A registrar sending RFC 5910 <code>dsData</code> gets nothing stored and no error.",
+    fix: "Reject dsData for .de with 2306 “use keyData”, and document keyData as the .de interface.",
+    steps: [], cases: ["s-secdns-add"], links: [["RFC 5910 §4", RFC(5910, "4")]] },
+  // ---------------------------------------------------------------- Templates
+  { id: "T1", comp: "Templates", pr: "High", status: "Open",
+    title: "Contact_Create builds RRI that DENIC rejects for some contacts",
+    what: "“Unable to create supporting contact … Validation of XML request against Schema failed” for a contact with org, two street lines, a state and cc <code>AI</code>. Hit on holder change and on contact updates.",
+    fix: "Render the failing contact through <code>Contact_Create</code> and validate against the DENIC contact schema to find the field.",
+    steps: ["06.18"], cases: ["o-dom-chholder"],
+    links: [["DENIC contact schema notes", `${SUITE}/docs/schemas/contact.md`]] },
+  { id: "T2", comp: "Templates", pr: "High", status: "Open",
+    title: "Template names and policy calls don't line up",
+    what: "Policy calls <code>Renew</code>, <code>Restore_Request/Report</code>, <code>Transfer_*</code>, <code>Host_Create</code>. The transport has <code>Restore</code>, <code>Chprov</code>, <code>Chholder</code>, <code>Create_AuthInfo1/2</code>, <code>Delete_AuthInfo1</code>, <code>Transit</code>, and nothing calls the last five.",
+    fix: "Rename one side or the other together with P2, P4, P5, P7, P8. Delete templates that stay unused.",
+    steps: [], cases: [], links: [["Deployed .de policy (policy_gw_denic)", `${DENICPOL}/policyconfig.xml`]] },
+  { id: "T3", comp: "Templates", pr: "Low", status: "Verify after R1",
+    title: "Check Domain_Update against the DENIC examples once it gets full state",
+    what: "The template looks right for a full-state context but has never rendered one successfully.",
+    fix: "After R1, compare rendered output with the DENIC <code>domainUPDATE</code> examples.",
+    steps: [], cases: [], links: [["DENIC update reference", `${SUITE}/docs/commands/domainupdate.md`]] },
+  // ---------------------------------------------------------------- DAMSr
+  { id: "D1", comp: "DAMSr", pr: "Medium", status: "Open",
+    title: "Restore can't pass the edge: rgp-1.0 not advertised or loaded",
+    what: "The greeting doesn't list <code>urn:ietf:params:xml:ns:rgp-1.0</code> and its schema isn't loaded, so an RFC 3915 restore fails with 2001 “No matching global element declaration” before reaching rEngin.",
+    fix: "Advertise rgp-1.0 and load <code>rgp-1.0.xsd</code> for validation.",
+    steps: [], cases: ["o-rfc-greeting-rgp", "o-dom-restore"], links: [["RFC 3915 §4.2.5", RFC(3915, "4.2.5")]] },
+  { id: "D2", comp: "DAMSr", pr: "Low", status: "Open",
+    title: "Login accepts services the greeting doesn't advertise",
+    what: "Logging in with <code>host-1.0</code> succeeds although the greeting doesn't offer it.",
+    fix: "Answer 2307 (unimplemented object service), per RFC 5730.",
+    steps: [], cases: [], links: [["RFC 5730 §2.9.1.1", RFC(5730, "2.9.1.1")]] },
+  { id: "D3", comp: "DAMSr", pr: "Low", status: "Re-check on 1.3.12",
+    title: "Malformed XML dropped the connection instead of returning 2001",
+    what: "Earlier runs sending non-namespace-well-formed XML got a closed TCP connection with no EPP response.",
+    fix: "Re-test on DAMSr 1.3.12; every parse failure should get a framed 2001.",
+    steps: [], cases: [], links: [["Old diagnosis (client bug, resolved)", `${SUITE}/diagnostics/de/b-poll-empty.md`]] },
+];
+
+// ---------------------------------------------------------------- state
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+};
+let done = new Set(store.get("de-bugs-done", []));
+const state = { comp: null, pr: new Set(), q: "", hideDone: store.get("de-bugs-hidedone", false) };
+
+const $ = s => document.querySelector(s);
+const esc = s => s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const strip = s => s.replace(/<[^>]+>/g, "").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+const compOf = k => COMPONENTS.find(c => c.key === k);
+
+function renderStats() {
+  const el = $("#stats");
+  el.innerHTML = "";
+  const all = document.createElement("button");
+  all.className = "stat"; all.setAttribute("aria-pressed", String(state.comp === null));
+  const open = ISSUES.filter(i => !done.has(i.id)).length;
+  all.innerHTML = `<div class="n">${open}</div><div class="l">open of ${ISSUES.length}</div>`;
+  all.onclick = () => { state.comp = null; render(); };
+  el.appendChild(all);
+  for (const c of COMPONENTS) {
+    const items = ISSUES.filter(i => i.comp === c.key);
+    const b = document.createElement("button");
+    b.className = "stat"; b.setAttribute("aria-pressed", String(state.comp === c.key));
+    const p0 = items.filter(i => i.pr === "P0" && !done.has(i.id)).length;
+    b.innerHTML = `<div class="n">${items.filter(i => !done.has(i.id)).length}</div>
+      <div class="l"><span class="dot" style="background:${c.color}"></span>${c.label}${p0 ? ` · ${p0} P0` : ""}</div>`;
+    b.onclick = () => { state.comp = state.comp === c.key ? null : c.key; render(); };
+    el.appendChild(b);
+  }
+}
+
+function renderPrChips() {
+  const el = $("#prchips");
+  el.innerHTML = "";
+  for (const p of PRIORITIES) {
+    const b = document.createElement("button");
+    b.className = "chip"; b.textContent = p;
+    b.setAttribute("aria-pressed", String(state.pr.has(p)));
+    b.onclick = () => { state.pr.has(p) ? state.pr.delete(p) : state.pr.add(p); render(); };
+    el.appendChild(b); el.append(" ");
+  }
+}
+
+function matches(i) {
+  if (state.comp && i.comp !== state.comp) return false;
+  if (state.pr.size && !state.pr.has(i.pr)) return false;
+  if (state.hideDone && done.has(i.id)) return false;
+  if (state.q) {
+    const hay = [i.id, i.comp, i.pr, i.status, i.title, strip(i.what), strip(i.fix), ...i.steps, ...i.cases].join(" ").toLowerCase();
+    if (!state.q.split(/\s+/).every(t => hay.includes(t))) return false;
+  }
+  return true;
+}
+
+function card(i) {
+  const c = compOf(i.comp);
+  const d = document.createElement("details");
+  d.className = "card" + (done.has(i.id) ? " done" : "");
+  d.style.setProperty("--comp", c.color);
+  d.id = i.id;
+  if (location.hash === "#" + i.id) d.open = true;
+  const steps = i.steps.map(s => `<a class="step" href="${SHEET}" title="Run sheet step ${s}">${s}</a>`).join("");
+  const cases = i.cases.map(s => `<a class="step suite" href="${SUITE}/suite/cases.py" title="EPP suite case">${s}</a>`).join("");
+  const links = i.links.map(([t, u]) => `<li><a href="${u}">${esc(t)}</a></li>`).join("");
+  d.innerHTML = `
+    <summary>
+      <input type="checkbox" class="donebox" aria-label="Mark ${i.id} done" ${done.has(i.id) ? "checked" : ""}>
+      <span class="id">${i.id}</span>
+      <span class="title">${esc(i.title)}</span>
+      <span class="meta"><span class="badge pr-${i.pr}">${i.pr}</span><span class="badge st ${i.fixed ? "st-fix" : ""}">${esc(i.status)}</span></span>
+    </summary>
+    <div class="body">
+      <h4>What's wrong</h4><p>${i.what}</p>
+      <h4>Fix</h4><p>${i.fix}</p>
+      ${steps || cases ? `<h4>Failing steps / cases</h4><div class="steps">${steps}${cases}</div>` : ""}
+      ${links ? `<h4>Evidence</h4><ul>${links}</ul>` : ""}
+    </div>`;
+  const box = d.querySelector(".donebox");
+  box.addEventListener("click", e => e.stopPropagation());
+  box.addEventListener("change", () => {
+    box.checked ? done.add(i.id) : done.delete(i.id);
+    store.set("de-bugs-done", [...done]);
+    render();
+  });
+  return d;
+}
+
+function render() {
+  renderStats(); renderPrChips();
+  $("#hidedone").checked = state.hideDone;
+  const list = $("#list");
+  list.innerHTML = "";
+  let shown = 0;
+  for (const c of COMPONENTS) {
+    const items = ISSUES.filter(i => i.comp === c.key && matches(i))
+      .sort((a, b) => PRIORITIES.indexOf(a.pr) - PRIORITIES.indexOf(b.pr));
+    if (!items.length) continue;
+    const h = document.createElement("h2");
+    h.className = "group";
+    h.innerHTML = `<span class="dot" style="background:${c.color}"></span>${c.label} <span class="where">— ${esc(c.where)}</span>`;
+    list.appendChild(h);
+    items.forEach(i => list.appendChild(card(i)));
+    shown += items.length;
+  }
+  $("#empty").style.display = shown ? "none" : "block";
+}
+
+$("#q").addEventListener("input", e => { state.q = e.target.value.trim().toLowerCase(); render(); });
+$("#hidedone").addEventListener("change", e => { state.hideDone = e.target.checked; store.set("de-bugs-hidedone", state.hideDone); render(); });
+$("#copy").addEventListener("click", async () => {
+  const lines = [];
+  for (const c of COMPONENTS) {
+    const items = ISSUES.filter(i => i.comp === c.key && matches(i) && !done.has(i.id));
+    if (!items.length) continue;
+    lines.push(`### ${c.label} (${c.where})`);
+    items.forEach(i => lines.push(`- [ ] **${i.id}** [${i.pr}] ${i.title}. Fix: ${strip(i.fix)}`));
+    lines.push("");
+  }
+  const text = lines.join("\n");
+  const toast = $("#toast");
+  try { await navigator.clipboard.writeText(text); toast.textContent = "Copied open issues as a checklist"; }
+  catch { toast.textContent = "Copy failed: clipboard not available"; }
+  toast.classList.add("show"); setTimeout(() => toast.classList.remove("show"), 1800);
+});
+window.addEventListener("hashchange", render);
+render();
+</script>
+</body>
+</html>
