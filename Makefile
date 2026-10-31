@@ -97,7 +97,7 @@ publish:
 	echo "$(GREEN)Current version: $$VERSION$(RESET)"; \
 	if [ -n "$(NEXT)" ]; then \
 		NEXT_VERSION="$(NEXT)"; \
-		printf '%s' "$$NEXT_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$$' || { echo "$(RED)Invalid NEXT: $(NEXT) (expected X.Y.Z)$(RESET)"; exit 1; }; \
+		case "$$NEXT_VERSION" in [0-9]*.[0-9]*.[0-9]*) ;; *) echo "$(RED)ERROR: version '$$NEXT_VERSION' is not X.Y.Z — refusing to publish.$(RESET)"; exit 1;; esac; \
 	elif [ "$(BUMP)" = "major" ]; then \
 		MAJOR="$$(echo "$$VERSION" | cut -d. -f1 | sed 's/^0*//;s/^$$/0/')"; \
 		NEXT_VERSION="$$((MAJOR+1)).0.0"; \
@@ -114,7 +114,7 @@ publish:
 		echo "$(RED)Unknown BUMP value: $(BUMP) (use: build, minor, major)$(RESET)"; \
 		exit 1; \
 	fi; \
-	echo "$$NEXT_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$$' || { echo "$(RED)Invalid next version: $$NEXT_VERSION (expected X.Y.Z)$(RESET)"; exit 1; }; \
+	case "$$NEXT_VERSION" in [0-9]*.[0-9]*.[0-9]*) ;; *) echo "$(RED)ERROR: version '$$NEXT_VERSION' is not X.Y.Z — refusing to publish.$(RESET)"; exit 1;; esac; \
 	if [ "$(VERSION_BUMP)" = "false" ]; then \
 		echo "$(YELLOW)VERSION_BUMP=false — skipping version bump and commit$(RESET)"; \
 	else \
