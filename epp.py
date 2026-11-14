@@ -22,6 +22,9 @@ from typing import List
 
 from lib import colorlogging
 
+DEFAULT_SERVICES = ['urn:ietf:params:xml:ns:domain-1.0', 'urn:ietf:params:xml:ns:contact-1.0']
+DEFAULT_SERVICE_EXTENSIONS = ['urn:ietf:params:xml:ns:secDNS-1.1']
+
 LOGIN_TEMPLATE="""<?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <epp xmlns="urn:ietf:params:xml:ns:epp-1.0">
    <command>
@@ -143,6 +146,29 @@ class EPPTCPTransport:
         self.sock.close()
 
 
+def resolve_service_list(values, defaults):
+    """Resolve the --svc / --svc-ext values into the list to send in <login>.
+
+    Without options the defaults are sent, and given options are added to the
+    defaults, exactly as before. A value of '' (e.g. --svc= on the command
+    line) clears the list built so far, so the defaults can be *replaced* and
+    not only extended. Needed for registries such as Google/Nomulus that
+    reject contact-1.0 (removed with the Minimum Data Set migration) in
+    <login> with result code 2307.
+
+    Example (Google): --svc= --svc=urn:ietf:params:xml:ns:domain-1.0
+    --svc=urn:ietf:params:xml:ns:host-1.0 --svc-ext=
+    --svc-ext=urn:ietf:params:xml:ns:secDNS-1.1
+    --svc-ext=urn:ietf:params:xml:ns:epp:fee-1.0
+    """
+    if values is None:
+        return list(defaults)
+    result = list(defaults)
+    for value in values:
+        result = [] if value == '' else result + [value]
+    return result
+
+
 def templatefill(template, defines):
     """Fill out the given template with values as requested"""
     data = {}
@@ -233,12 +259,17 @@ if __name__ == "__main__":
     parser.add_option("-d", "--define", dest="defs", action="append",
                       help="For scripting, any fields to be replaced (python dictionary subsitution). Eg: -d "
                            "DOMAIN=test.co.za will replace %(DOMAIN)s with test.co.za")
-    parser.add_option("--svc", dest="svc", action="append", default=['urn:ietf:params:xml:ns:domain-1.0', 'urn:ietf:params:xml:ns:contact-1.0'],
+    parser.add_option("--svc", dest="svc", action="append", default=None,
                       help="Add a services sent with the epp login command "
-                           "--svc 'urn:ietf:params:xml:ns:host-1.0'")
-    parser.add_option("--svc-ext", dest="svc_ext", action="append", default=['urn:ietf:params:xml:ns:secDNS-1.1'],
+                           "--svc 'urn:ietf:params:xml:ns:host-1.0'. Default if not given: "
+                           + " ".join(DEFAULT_SERVICES) +
+                           ". Use --svc= (empty) first to clear the defaults and send only the "
+                           "services listed after it (e.g. for Google/Nomulus which rejects contact-1.0).")
+    parser.add_option("--svc-ext", dest="svc_ext", action="append", default=None,
                       help="Add a services extensions sent with the epp login command "
-                           "--svc-ext 'urn:ietf:params:xml:ns:secDNS-1.1'")
+                           "--svc-ext 'urn:ietf:params:xml:ns:secDNS-1.1'. Default if not given: "
+                           + " ".join(DEFAULT_SERVICE_EXTENSIONS) +
+                           ". Use --svc-ext= (empty) first to clear the defaults.")
     (options, args) = parser.parse_args()
 
     if options.verbose:
@@ -275,7 +306,9 @@ if __name__ == "__main__":
             print(str(epp.getGreeting()))
 
         if options.username is not None:
-            eppLogin(options.username, options.password, options.svc, options.svc_ext)
+            eppLogin(options.username, options.password,
+                     resolve_service_list(options.svc, DEFAULT_SERVICES),
+                     resolve_service_list(options.svc_ext, DEFAULT_SERVICE_EXTENSIONS))
 
     # Permit the first xml command file from an input pipe - that will permit flexibility of xml command file pre-processing 
     # Eg. remove comments:
